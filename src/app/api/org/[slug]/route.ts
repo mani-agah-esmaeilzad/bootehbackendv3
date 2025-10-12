@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 
         // 2. پیدا کردن تمام پرسشنامه‌های متصل به این سازمان
         const [questionnaires] = await pool.query<RowDataPacket[]>(`
-            SELECT q.id, q.name, q.description 
+            SELECT q.id, q.name, q.description, q.category 
             FROM questionnaires q
             JOIN organization_questionnaires oq ON q.id = oq.questionnaire_id
             WHERE oq.organization_id = ?

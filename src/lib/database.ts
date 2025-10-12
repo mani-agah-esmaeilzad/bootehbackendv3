@@ -1,5 +1,6 @@
 // src/lib/database.ts
 import mysql from 'mysql2/promise';
+import { PERSONALITY_TEST_SEED } from '@/constants/personalityTestsSeed';
 
 // پیکربندی دیتابیس از متغیرهای محیطی خوانده می‌شود
 const dbConfig = {
@@ -101,11 +102,53 @@ export async function createTables() {
         timer_duration INT DEFAULT 15,
         min_questions INT DEFAULT 5,
         max_questions INT DEFAULT 8,
+        display_order INT DEFAULT 0,
+        category VARCHAR(100) NOT NULL DEFAULT 'مهارت‌های ارتباطی',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
     console.log("  - جدول 'questionnaires' ایجاد شد.");
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS personality_assessments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL UNIQUE,
+        tagline VARCHAR(255) NOT NULL,
+        description TEXT NOT NULL,
+        report_name VARCHAR(255) NOT NULL,
+        highlights TEXT NOT NULL,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("  - جدول 'personality_assessments' ایجاد شد.");
+
+    const [personalityCountRows]: any = await connection.execute("SELECT COUNT(*) as count FROM personality_assessments");
+    if (personalityCountRows[0].count === 0) {
+      const insertPlaceholders = PERSONALITY_TEST_SEED.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ");
+      const insertValues: any[] = [];
+      PERSONALITY_TEST_SEED.forEach((test) => {
+        insertValues.push(
+          test.name,
+          test.slug,
+          test.tagline,
+          test.description,
+          test.report_name,
+          JSON.stringify(test.highlights),
+          test.is_active ?? true
+        );
+      });
+      if (insertPlaceholders.length > 0) {
+        await connection.execute(
+          `INSERT INTO personality_assessments (name, slug, tagline, description, report_name, highlights, is_active) VALUES ${insertPlaceholders}`,
+          insertValues
+        );
+        console.log("  - داده‌های اولیه آزمون‌های شخصیتی اضافه شد.");
+      }
+    }
 
     // جدول ارزیابی‌های هر کاربر
     await connection.execute(`

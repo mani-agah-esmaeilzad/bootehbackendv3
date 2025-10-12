@@ -1,74 +1,76 @@
 // src/app/api/assessment/start/[id]/route.ts
 
-import { NextRequest, NextResponse } from 'next/server';
-import { extractTokenFromHeader, authenticateToken } from '@/lib/auth';
-import { getConnectionWithRetry } from '@/lib/database';
-// import { createConversationState } from '@/lib/ai-conversations'; // <-- این خط حذف می‌شود
+import { NextResponse } from 'next/server';
+import db from '@/lib/database';
+import { getSession } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
+import { getInitialAssessmentPrompt } from '@/lib/ai';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(
-    request: NextRequest,
-    { params }: { params: { id: string } }
+  req: Request,
+  { params }: { params: { id: string } }
 ) {
-    let connection;
-    try {
-        const token = extractTokenFromHeader(request.headers.get('authorization'));
-        if (!token) {
-            return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });
-        }
-        const decodedToken = authenticateToken(token) as { id: number; };
-        const userId = decodedToken.id;
-        
-        const assessmentId = parseInt(params.id, 10);
-        if (isNaN(assessmentId)) {
-            return NextResponse.json({ success: false, message: 'شناسه ارزیابی نامعتبر است' }, { status: 400 });
-        }
-
-        connection = await getConnectionWithRetry();
-        if (!connection) {
-            throw new Error('اتصال به دیتابیس برقرار نشد');
-        }
-
-        // اطلاعات پرسشنامه را مستقیماً از دیتابیس می‌خوانیم
-        const [assessmentRows]: any = await connection.execute(
-            'SELECT q.*, ua.status FROM questionnaires q JOIN user_assessments ua ON q.id = ua.questionnaire_id WHERE q.id = ? AND ua.user_id = ?',
-            [assessmentId, userId]
-        );
-
-        if (assessmentRows.length === 0) {
-            return NextResponse.json({ success: false, message: 'ارزیابی یافت نشد یا به شما تخصیص داده نشده است' }, { status: 404 });
-        }
-        
-        const assessment = assessmentRows[0];
-        
-        if (assessment.status === 'completed') {
-            return NextResponse.json({ success: false, message: 'این ارزیابی قبلا توسط شما تکمیل شده است' }, { status: 403 });
-        }
-        
-        const sessionId = uuidv4();
-
-        // نیازی به فراخوانی createConversationState نیست. 
-        // تابع getConversationState در فایل chat/route.ts خودش جلسه جدید را مدیریت می‌کند.
-
-        // اطلاعات لازم برای شروع چت را مستقیماً از آبجکت assessment برمی‌گردانیم
-        return NextResponse.json({
-            success: true,
-            data: {
-                sessionId: sessionId,
-                initialMessage: assessment.welcome_message || 'سلام! به جلسه ارزیابی خوش آمدید. آماده‌اید شروع کنیم؟',
-                settings: {
-                    has_timer: assessment.has_timer,
-                    timer_duration: assessment.timer_duration,
-                },
-                // نام شخصیت را مستقیماً از اینجا می‌خوانیم
-                personaName: assessment.persona_name || 'مشاور',
-            }
-        });
-
-    } catch (error: any) {
-        console.error('Start Assessment API Error:', error);
-        return NextResponse.json({ success: false, message: error.message || 'خطای سرور' }, { status: 500 });
-    } finally {
-        if (connection) connection.release();
+  try {
+    const session = await getSession();
+    if (!session?.user?.userId) {
+      return NextResponse.json({ success: false, message: 'Unauthorized: User not found' }, { status: 401 });
     }
+    const userId = session.user.userId;
+    const questionnaireId = parseInt(params.id, 10);
+
+    if (isNaN(questionnaireId)) {
+      return NextResponse.json({ success: false, message: 'Invalid assessment ID' }, { status: 400 });
+    }
+
+    const [assessmentRows]: any = await db.query(
+      `SELECT 
+        q.id, 
+        q.name as title, 
+        JSON_OBJECT('has_timer', q.has_timer, 'timer_duration', q.timer_duration) as settings, 
+        q.persona_name
+       FROM questionnaires q
+       LEFT JOIN assessments a ON q.id = a.questionnaire_id AND a.user_id = ?
+       WHERE q.id = ? AND (a.status IS NULL OR a.status = 'pending' OR a.status = 'current')`,
+      [userId, questionnaireId]
+    );
+
+    if (assessmentRows.length === 0) {
+      return NextResponse.json({ success: false, message: 'Assessment not found or already completed' }, { status: 404 });
+    }
+
+    const assessment = assessmentRows[0];
+    const sessionId = uuidv4();
+    const initialMessage = getInitialAssessmentPrompt(assessment.title);
+
+    await db.query(
+      `INSERT INTO assessments (user_id, questionnaire_id, status, session_id, results, updated_at)
+       VALUES (?, ?, 'in-progress', ?, ?, NOW())
+       ON DUPLICATE KEY UPDATE status = 'in-progress', session_id = VALUES(session_id), updated_at = NOW()`,
+      [userId, questionnaireId, sessionId, JSON.stringify({ version: '1.0', history: [] })]
+    );
+    
+    // Improved safety for JSON parsing
+    let parsedSettings = {};
+    try {
+        if(assessment.settings) parsedSettings = JSON.parse(assessment.settings);
+    } catch(e) {
+        console.error("Failed to parse settings JSON:", assessment.settings);
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        sessionId,
+        initialMessage,
+        settings: parsedSettings,
+        personaName: assessment.persona_name,
+      },
+    });
+
+  } catch (error) {
+    console.error('Error starting assessment:', error);
+    return NextResponse.json({ success: false, message: 'An internal server error occurred' }, { status: 500 });
+  }
 }

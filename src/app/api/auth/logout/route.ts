@@ -1,62 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { extractTokenFromHeader, authenticateToken } from '@/lib/auth';
-import pool from '@/lib/database';
+// src/app/api/auth/logout/route.ts
 
-export async function POST(request: NextRequest) {
-  try {
-    // استخراج توکن از header
-    const authHeader = request.headers.get('authorization');
-    const token = extractTokenFromHeader(authHeader);
+import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
-    if (!token) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'توکن احراز هویت ارائه نشده است' 
-        },
-        { status: 401 }
-      );
-    }
-
-    // تایید توکن
-    let decodedToken;
+export async function POST() {
     try {
-      decodedToken = authenticateToken(token);
+        // حذف کوکی با تنظیم تاریخ انقضا در گذشته
+        cookies().set('authToken', '', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            expires: new Date(0),
+        });
+
+        return NextResponse.json({ success: true, message: 'خروج با موفقیت انجام شد' });
     } catch (error) {
-      return NextResponse.json(
-        { 
-          success: false, 
-          message: 'توکن نامعتبر یا منقضی شده است' 
-        },
-        { status: 401 }
-      );
+        console.error('Logout API Error:', error);
+        return NextResponse.json({ success: false, message: 'خطای داخلی سرور' }, { status: 500 });
     }
-
-    const connection = await pool.getConnection();
-    try {
-      // حذف توکن از دیتابیس
-      await connection.execute(
-        'DELETE FROM auth_tokens WHERE token = ?',
-        [token]
-      );
-
-      return NextResponse.json({
-        success: true,
-        message: 'خروج موفقیت‌آمیز بود'
-      });
-
-    } finally {
-      connection.release();
-    }
-
-  } catch (error) {
-    console.error('خطا در خروج:', error);
-    return NextResponse.json(
-      { 
-        success: false, 
-        message: 'خطای سرور. لطفاً دوباره تلاش کنید' 
-      },
-      { status: 500 }
-    );
-  }
 }

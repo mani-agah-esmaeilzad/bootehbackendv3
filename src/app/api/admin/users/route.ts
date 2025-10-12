@@ -1,29 +1,39 @@
-// فایل کامل و اصلاح شده: src/app/api/admin/users/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/database';
+// src/app/api/admin/users/route.ts
+
+import { NextResponse } from 'next/server';
+import db from '@/lib/database'; // Corrected import
 import { authenticateToken, extractTokenFromHeader } from '@/lib/auth';
 
-export const dynamic = 'force-dynamic';
-
-export async function GET(request: NextRequest) {
-  try {
-    const token = extractTokenFromHeader(request.headers.get('authorization'));
-    if (!token) return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });
-    
-    const decodedToken = authenticateToken(token);
-    if (decodedToken.role !== 'admin') return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 403 });
-
-    const connection = await pool.getConnection();
+export async function GET(request: Request) {
     try {
-      const [rows] = await connection.execute(
-        'SELECT id, username, email, first_name, last_name, is_active, created_at FROM users ORDER BY id DESC'
-      );
-      return NextResponse.json({ success: true, data: rows });
-    } finally {
-      connection.release();
+        const token = extractTokenFromHeader(request.headers.get('Authorization'));
+        if (!token) {
+            return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });
+        }
+        
+        const decodedToken = authenticateToken(token);
+
+        // *** FIX APPLIED HERE ***
+        // Replaced the faulty check with the standard null and role check.
+        if (!decodedToken || decodedToken.role !== 'admin') {
+            return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 403 });
+        }
+
+        // Corrected to use the imported 'db' object
+        try {
+            const [rows] = await db.query(
+                `SELECT id, username, email, first_name, last_name, is_active, created_at 
+                 FROM users 
+                 ORDER BY created_at DESC`
+            );
+            return NextResponse.json({ success: true, data: rows });
+        } catch (dbError) {
+            console.error("Database query error:", dbError);
+            throw dbError; // Re-throw to be caught by the outer catch block
+        }
+
+    } catch (error) {
+        console.error("Get Users Error:", error);
+        return NextResponse.json({ success: false, message: 'خطای سرور' }, { status: 500 });
     }
-  } catch (error: any) {
-    console.error('Error fetching users:', error);
-    return NextResponse.json({ success: false, message: error.message || 'خطای سرور' }, { status: 500 });
-  }
 }

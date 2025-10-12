@@ -1,109 +1,126 @@
+
 // src/app/api/admin/questionnaires/route.ts
 
-import { NextRequest, NextResponse } from 'next/server';
-import { extractTokenFromHeader, authenticateToken } from '@/lib/auth';
-import { getConnectionWithRetry } from '@/lib/database';
+import { NextResponse } from 'next/server';
+import db from '@/lib/database';
+import { getSession } from '@/lib/auth';
 import { z } from 'zod';
+import { QUESTIONNAIRE_CATEGORIES } from '@/constants/questionnaireCategories';
 
-// ... (schema and POST function remain the same as before)
-const questionnaireSchema = z.object({
-    name: z.string().min(3),
-    welcome_message: z.string().min(10),
-    persona_name: z.string().min(2),
-    persona_prompt: z.string().min(20),
-    analysis_prompt: z.string().min(20),
-    has_timer: z.boolean(),
-    timer_duration: z.number().optional().nullable(),
+export const dynamic = 'force-dynamic';
+
+const createQuestionnaireSchema = z.object({
+    name: z.string().min(1, "نام پرسشنامه نمی‌تواند خالی باشد"),
+    description: z.string().optional(),
+    welcome_message: z.string().min(1, "پیام خوشامدگویی نمی‌تواند خالی باشد"),
+    persona_prompt: z.string().min(1, "پرامپت شخصیت نمی‌تواند خالی باشد"),
+    analysis_prompt: z.string().min(1, "پرامپت تحلیل نمی‌تواند خالی باشد"),
+    persona_name: z.string().optional(),
     secondary_persona_name: z.string().optional().nullable(),
     secondary_persona_prompt: z.string().optional().nullable(),
-}).refine(data => {
-    if (data.has_timer) {
-        return typeof data.timer_duration === 'number' && data.timer_duration > 0;
-    }
-    return true;
-}, {
-    message: "Timer duration is required when the timer is enabled.",
-    path: ["timer_duration"],
+    has_narrator: z.boolean().default(false),
+    has_timer: z.boolean().default(true),
+    timer_duration: z.number().optional().nullable(),
+    category: z.enum(QUESTIONNAIRE_CATEGORIES, { errorMap: () => ({ message: "دسته‌بندی انتخاب شده معتبر نیست" }) }),
 });
 
-
-export async function POST(request: NextRequest) {
-    let connection;
+// GET Handler - To fetch all questionnaires
+export async function GET(request: Request) {
     try {
-        const token = extractTokenFromHeader(request.headers.get('authorization'));
-        if (!token) return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });
+        const session = await getSession();
+        if (!session.user || session.user.role !== 'admin') {
+            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+        }
+
+        // *** FINAL FIX: Using correct column 'name' and aliasing it to 'title' for frontend compatibility ***
+        const [rows] = await db.query(
+            `SELECT 
+                id, 
+                name as title, 
+                description,
+                display_order,
+                has_narrator,
+                category
+             FROM questionnaires 
+             ORDER BY display_order ASC, id ASC`
+        );
         
-        const decodedToken = authenticateToken(token) as { id: number; role: string; };
-        if (decodedToken.role !== 'admin') return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+        return NextResponse.json({ success: true, data: rows });
+    } catch (error) {
+        console.error("Get Questionnaires Error:", error);
+        return NextResponse.json({ success: false, message: 'خطای سرور' }, { status: 500 });
+    }
+}
+
+// POST Handler - To create a new questionnaire
+export async function POST(request: Request) {
+    try {
+        const session = await getSession();
+        if (!session.user || session.user.role !== 'admin') {
+            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+        }
 
         const body = await request.json();
-
-        const validationResult = questionnaireSchema.safeParse(body);
-        if (!validationResult.success) {
-            console.error("Validation Error:", validationResult.error.errors);
-            return NextResponse.json({ success: false, message: "داده‌های ورودی نامعتبر است", errors: validationResult.error.errors }, { status: 400 });
+        const validation = createQuestionnaireSchema.safeParse(body);
+        if (!validation.success) {
+            return NextResponse.json({ success: false, message: validation.error.errors[0].message }, { status: 400 });
         }
 
         const {
             name,
+            description,
             welcome_message,
-            persona_name,
             persona_prompt,
             analysis_prompt,
+            persona_name,
+            secondary_persona_name,
+            secondary_persona_prompt,
+            has_narrator,
             has_timer,
             timer_duration,
-            secondary_persona_name,
-            secondary_persona_prompt
-        } = validationResult.data;
+            category
+        } = validation.data;
 
-        connection = await getConnectionWithRetry();
-        if (!connection) throw new Error('اتصال به دیتابیس برقرار نشد');
-        
-        const [result] = await connection.execute(
-            `INSERT INTO questionnaires (name, welcome_message, persona_name, persona_prompt, analysis_prompt, has_timer, timer_duration, secondary_persona_name, secondary_persona_prompt)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [
+        const [orderResult]: any = await db.query("SELECT MAX(display_order) as max_order FROM questionnaires");
+        const newOrder = (orderResult[0].max_order || 0) + 1;
+
+        const [result]: any = await db.query(
+            `INSERT INTO questionnaires (
                 name,
+                description,
                 welcome_message,
-                persona_name,
                 persona_prompt,
                 analysis_prompt,
-                has_timer,
-                has_timer ? timer_duration : null,
+                persona_name,
                 secondary_persona_name,
-                secondary_persona_prompt
+                secondary_persona_prompt,
+                has_narrator,
+                has_timer,
+                timer_duration,
+                display_order,
+                category
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+                name,
+                description,
+                welcome_message,
+                persona_prompt,
+                analysis_prompt,
+                persona_name,
+                secondary_persona_name,
+                secondary_persona_prompt,
+                has_narrator,
+                has_timer,
+                timer_duration ?? null,
+                newOrder,
+                category
             ]
         );
-        
-        return NextResponse.json({ success: true, data: { id: (result as any).insertId } });
 
-    } catch (error: any) {
-        console.error('Create Questionnaire API Error:', error);
-        return NextResponse.json({ success: false, message: error.message || 'خطای سرور' }, { status: 500 });
-    } finally {
-        if (connection) connection.release();
-    }
-}
+        return NextResponse.json({ success: true, message: 'پرسشنامه جدید با موفقیت ایجاد شد', data: { id: result.insertId } });
 
-
-export async function GET(request: NextRequest) {
-    let connection;
-    try {
-        const token = extractTokenFromHeader(request.headers.get('authorization'));
-        if (!token) {
-            return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });
-        }
-        authenticateToken(token);
-
-        connection = await getConnectionWithRetry();
-        // ✅ مرتب‌سازی بر اساس display_order
-        const [rows] = await connection.execute('SELECT id, name FROM questionnaires ORDER BY display_order ASC');
-
-        return NextResponse.json({ success: true, data: rows });
-    } catch (error: any) {
-        console.error("Error fetching questionnaires:", error.message);
-        return NextResponse.json({ success: false, message: error.message || 'خطای سرور' }, { status: 500 });
-    } finally {
-        if (connection) connection.release();
+    } catch (error) {
+        console.error("Create Questionnaire Error:", error);
+        return NextResponse.json({ success: false, message: 'خطای سرور' }, { status: 500 });
     }
 }

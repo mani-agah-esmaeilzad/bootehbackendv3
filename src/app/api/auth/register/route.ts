@@ -1,119 +1,124 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { registerSchema } from '@/lib/validation';
-import { hashPassword, generateToken } from '@/lib/auth';
-import pool from '@/lib/database';
+// src/app/api/auth/register/route.ts
 
-export async function POST(request: NextRequest) {
+import { NextResponse } from "next/server";
+import bcrypt from "bcryptjs";
+import db from "@/lib/database";
+import { z } from "zod";
+
+// Zod schema updated to remove organizationId and match the database
+const registerSchema = z.object({
+  email: z.string().email({ message: "ایمیل نامعتبر است" }),
+  password: z
+    .string()
+    .min(6, { message: "رمز عبور باید حداقل ۶ کاراکتر باشد" }),
+  firstName: z.string().min(1, { message: "نام نمی‌تواند خالی باشد" }),
+  lastName: z.string().min(1, { message: "نام خانوادگی نمی‌تواند خالی باشد" }),
+  // organizationId is completely removed
+  phoneNumber: z.string().optional(),
+  age: z.number().optional(),
+  educationLevel: z.string().optional(),
+  workExperience: z.string().optional(),
+});
+
+// تابعی برای ساختن یک نام کاربری منحصر به فرد
+async function createUniqueUsername(email: string): Promise<string> {
+  let username = email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, '');
+  if (username.length < 3) username = `user_${username}`;
+  let isUnique = false;
+  let counter = 0;
+  let finalUsername = username;
+
+  while (!isUnique) {
+    const [existingUsers] = await db.query(
+      "SELECT id FROM users WHERE username = ?",
+      [finalUsername]
+    );
+
+    if (Array.isArray(existingUsers) && existingUsers.length === 0) {
+      isUnique = true;
+    } else {
+      counter++;
+      finalUsername = `${username}${counter}`;
+    }
+  }
+  return finalUsername;
+}
+
+export async function POST(req: Request) {
   try {
-    const body = await request.json();
-    
-    const validationResult = registerSchema.safeParse(body);
-    if (!validationResult.success) {
+    const body = await req.json();
+
+    const validation = registerSchema.safeParse(body);
+    if (!validation.success) {
       return NextResponse.json(
-        { 
-          success: false, 
-          message: 'داده‌های ورودی نامعتبر است',
-          error: validationResult.error.errors[0]?.message 
-        },
+        { success: false, message: validation.error.errors[0].message },
         { status: 400 }
       );
     }
-
+    
     const { 
-      username, 
-      email, 
-      password, 
-      first_name, 
-      last_name, 
-      phone_number, 
-      age, 
-      education_level, 
-      work_experience 
-    } = validationResult.data;
+        email, password, firstName, lastName,
+        phoneNumber, age, educationLevel, workExperience 
+    } = validation.data;
 
-    const passwordHash = await hashPassword(password);
+    const [existingEmail] = await db.query(
+      "SELECT id FROM users WHERE email = ?",
+      [email]
+    );
 
-    const connection = await pool.getConnection();
-    try {
-      const [existingUsers] = await connection.execute(
-        'SELECT id FROM users WHERE username = ? OR email = ?',
-        [username, email]
+    if (Array.isArray(existingEmail) && existingEmail.length > 0) {
+      return NextResponse.json(
+        { success: false, message: "کاربری با این ایمیل قبلاً ثبت‌نام کرده است" },
+        { status: 409 }
       );
+    }
+    
+    const username = await createUniqueUsername(email);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-      if (Array.isArray(existingUsers) && existingUsers.length > 0) {
-        return NextResponse.json(
-          { 
-            success: false, 
-            message: 'نام کاربری یا ایمیل قبلاً استفاده شده است' 
-          },
-          { status: 409 }
-        );
-      }
+    // *** FINAL FIX APPLIED HERE ***
+    // The INSERT statement is now perfectly aligned with your table structure.
+    // organization_id has been removed.
+    const [result] = await db.query(
+      `INSERT INTO users (
+        username, email, password_hash, first_name, last_name,
+        phone_number, age, education_level, work_experience
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        username,
+        email,
+        hashedPassword,
+        firstName,
+        lastName,
+        phoneNumber ?? null,
+        age ?? null,
+        educationLevel ?? null,
+        workExperience ?? null
+      ]
+    );
 
-      const [result] = await connection.execute(
-        `INSERT INTO users (
-          username, email, password_hash, first_name, last_name, 
-          phone_number, age, education_level, work_experience
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          username, 
-          email, 
-          passwordHash, 
-          first_name, 
-          last_name, 
-          phone_number || null, 
-          age ? parseInt(age as string) : null, 
-          education_level || null, 
-          work_experience || null
-        ]
-      );
-
-      const insertResult = result as any;
-      const userId = insertResult.insertId;
-
-      const [newUserRows] = await connection.execute(
-        'SELECT id, username, email, first_name, last_name, phone_number, age, education_level, work_experience, created_at FROM users WHERE id = ?',
-        [userId]
-      );
-
-      if (Array.isArray(newUserRows) && newUserRows.length > 0) {
-        const newUser = newUserRows[0] as any;
-
-        // Generate token immediately after registration
-        const token = generateToken(newUser.id, newUser.username);
-
-        const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 7); // 7-day expiry
-
-        await connection.execute(
-          'INSERT INTO auth_tokens (user_id, token, expires_at) VALUES (?, ?, ?)',
-          [newUser.id, token, expiresAt]
-        );
-
-        return NextResponse.json({
-          success: true,
-          message: 'حساب کاربری با موفقیت ایجاد شد',
-          data: {
-            user: newUser,
-            token,
-            expiresAt
-          }
-        }, { status: 201 });
-      } else {
-        throw new Error('خطا در ایجاد کاربر');
-      }
-
-    } finally {
-      connection.release();
+    const insertResult = result as any;
+    if (insertResult.affectedRows === 0) {
+      throw new Error("خطا در ایجاد کاربر جدید");
     }
 
+    const newUser = {
+      id: insertResult.insertId,
+      username,
+      email,
+      firstName,
+      lastName,
+    };
+
+    return NextResponse.json({
+      success: true,
+      message: "ثبت‌نام با موفقیت انجام شد",
+      user: newUser,
+    });
   } catch (error) {
-    console.error('خطا در ثبت‌نام:', error);
+    console.error("Register API Error:", error);
     return NextResponse.json(
-      { 
-        success: false, 
-        message: 'خطای سرور. لطفاً دوباره تلاش کنید' 
-      },
+      { success: false, message: "خطایی در سرور رخ داد" },
       { status: 500 }
     );
   }

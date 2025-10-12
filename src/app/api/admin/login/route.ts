@@ -1,47 +1,63 @@
-// فایل کامل: src/app/api/admin/login/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import { loginSchema } from '@/lib/validation';
+// src/app/api/admin/login/route.ts
+
+import { NextResponse } from 'next/server';
+import db from '@/lib/database';
 import { verifyPassword, generateToken } from '@/lib/auth';
-import pool from '@/lib/database';
+import { z } from 'zod';
+import { cookies } from 'next/headers';
 
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { username, password } = loginSchema.parse(body);
+const loginSchema = z.object({
+    username: z.string(),
+    password: z.string(),
+});
 
-    const connection = await pool.getConnection();
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
     try {
-      const [rows] = await connection.execute(
-        'SELECT * FROM admins WHERE username = ?',
-        [username]
-      );
+        const body = await req.json();
+        const validation = loginSchema.safeParse(body);
 
-      if (!Array.isArray(rows) || rows.length === 0) {
-        return NextResponse.json({ success: false, message: 'ادمین یافت نشد' }, { status: 404 });
-      }
+        if (!validation.success) {
+            return NextResponse.json({ success: false, message: 'نام کاربری یا رمز عبور نامعتبر است' }, { status: 400 });
+        }
+        
+        const { username, password } = validation.data;
 
-      const admin = rows[0] as any;
-      const isPasswordValid = await verifyPassword(password, admin.password_hash);
+        const [rows]: any = await db.query("SELECT * FROM admins WHERE username = ?", [username]);
+        
+        if (rows.length === 0) {
+            return NextResponse.json({ success: false, message: 'کاربری با این مشخصات یافت نشد' }, { status: 401 });
+        }
+        const admin = rows[0];
 
-      if (!isPasswordValid) {
-        return NextResponse.json({ success: false, message: 'نام کاربری یا رمز عبور اشتباه است' }, { status: 401 });
-      }
+        const isPasswordValid = await verifyPassword(password, admin.password_hash);
+        if (!isPasswordValid) {
+            return NextResponse.json({ success: false, message: 'کاربری با این مشخصات یافت نشد' }, { status: 401 });
+        }
 
-      // ✅ فراخوانی تابع جدید با زمان انقضا به ثانیه (۱۲ ساعت)
-      const twelveHoursInSeconds = 12 * 60 * 60;
-      const token = generateToken(admin.id, admin.username, 'admin', twelveHoursInSeconds);
+        const token = generateToken(admin.id, admin.username, 'admin');
 
-      return NextResponse.json({
-        success: true,
-        message: 'ورود ادمین موفقیت‌آمیز بود',
-        data: { token }
-      });
+        // *** FINAL FIX APPLIED HERE: Using the unified cookie name 'authToken' ***
+        cookies().set('authToken', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 60 * 60 * 24 * 1, // 1 day for admin
+        });
 
-    } finally {
-      connection.release();
+        return NextResponse.json({
+            success: true,
+            message: "ورود با موفقیت انجام شد",
+            user: {
+                id: admin.id,
+                username: admin.username,
+                role: 'admin',
+            },
+        });
+    } catch (error) {
+        console.error('Admin Login API Error:', error);
+        return NextResponse.json({ success: false, message: 'خطای داخلی سرور' }, { status: 500 });
     }
-  } catch (error) {
-    console.error('Admin Login Error:', error);
-    return NextResponse.json({ success: false, message: 'خطای سرور' }, { status: 500 });
-  }
 }

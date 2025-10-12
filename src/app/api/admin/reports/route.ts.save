@@ -1,0 +1,44 @@
+// src/app/api/admin/reports/route.ts
+
+import { NextResponse } from 'next/server';
+import db from '@/lib/database';
+import { authenticateToken, extractTokenFromHeader } from '@/lib/auth';
+
+export async function GET(request: Request) {
+    try {
+        const token = extractTokenFromHeader(request.headers.get('Authorization'));
+        if (!token) {
+            return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });
+        }
+        
+        const decodedToken = authenticateToken(token);
+
+        // *** FIX APPLIED HERE ***
+        // Replaced the incorrect type assertion with the standard null and role check.
+        if (!decodedToken || decodedToken.role !== 'admin') {
+            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+        }
+
+        // Fetching all user assessments for the admin report
+        const [rows]: any = await db.query(
+            `SELECT 
+                ua.id, 
+                ua.status,
+                ua.created_at,
+                u.username,
+                u.first_name,
+                u.last_name,
+                q.title as questionnaire_title
+             FROM user_assessments ua
+             JOIN users u ON ua.user_id = u.id
+             JOIN questionnaires q ON ua.assessment_id = q.id
+             ORDER BY ua.created_at DESC`
+        );
+
+        return NextResponse.json({ success: true, data: rows });
+
+    } catch (error) {
+        console.error("Get Reports List Error:", error);
+        return NextResponse.json({ success: false, message: 'خطای سرور' }, { status: 500 });
+    }
+}

@@ -1,9 +1,10 @@
+// src/lib/ai.ts
 import OpenAI from "openai";
 import type { ChatCompletionMessageParam } from "openai/resources/chat/completions";
 
 const AVALAI_API_KEY = process.env.AVALAI_API_KEY || '';
 const AVALAI_BASE_URL = process.env.AVALAI_BASE_URL || 'https://api.avalai.ir/v1';
-const DEFAULT_MODEL = "gemini-2.0-flash-lite"; // می‌توانید مدل پیش‌فرض را اینجا تغییر دهید
+const DEFAULT_MODEL = "gemini-2.0-flash-lite";
 
 if (!AVALAI_API_KEY) {
   throw new Error("AVALAI_API_KEY environment variable not set.");
@@ -14,19 +15,26 @@ const openai = new OpenAI({
     baseURL: AVALAI_BASE_URL,
 });
 
-// اینترفیس برای پیام‌های ورودی، سازگار با فرمت OpenAI
 export interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
 }
 
 /**
- * تابع اصلی برای تولید پاسخ با استفاده از AvalAI
- * @param systemInstruction دستورالعمل کلی برای مدل
- * @param history تاریخچه مکالمه
- * @param model نام مدلی که می‌خواهید استفاده کنید (مثلا gpt-4o-mini)
- * @returns {Promise<string | null>} پاسخ تولید شده توسط مدل
+ * تابعی برای استخراج یک رشته JSON تمیز از داخل یک بلاک کد مارک‌داون
  */
+const extractJsonFromString = (str: string): string => {
+    const match = str.match(/```json\s*([\s\S]*?)\s*```/);
+    if (match && match[1]) {
+        return match[1].trim();
+    }
+    return str.trim();
+};
+
+export const getInitialAssessmentPrompt = (assessmentTitle: string): string => {
+    return `سلام، من دستیار هوش مصنوعی شما برای ارزیابی شایستگی «${assessmentTitle}» هستم. برای شروع، لطفاً سناریویی که برای شما تعریف می‌شود را به دقت مطالعه کرده و پاسخ خود را ارائه دهید. آماده‌اید؟`;
+};
+
 export const generateResponse = async (
   systemInstruction: string,
   history: ChatMessage[],
@@ -55,12 +63,6 @@ export const generateResponse = async (
   }
 };
 
-/**
- * تابع برای تولید هوشمند سوالات تکمیلی
- * @param conversationJson تاریخچه مکالمه به صورت رشته JSON
- * @param personaPrompt پرامپت اصلی شخصیت
- * @returns {Promise<{ q1: string, q2: string }>} دو سوال تکمیلی
- */
 export const generateSupplementaryQuestions = async (conversationJson: string, personaPrompt: string): Promise<{ q1: string, q2: string }> => {
     try {
         const systemPrompt = `You are an expert HR interviewer. Your task is to generate two insightful follow-up questions in Persian based on the provided conversation history and the original persona prompt. The questions should probe deeper into areas where the user was vague, or challenge them on a key competency related to the persona. **Output ONLY a valid JSON object with two keys: "question1" and "question2". Do not add any other text.**`;
@@ -100,12 +102,6 @@ export const generateSupplementaryQuestions = async (conversationJson: string, p
     }
 };
 
-/**
- * تابع برای تحلیل نهایی مکالمه و تولید گزارش
- * @param conversationJson تاریخچه مکالمه به صورت رشته JSON
- * @param analysisPrompt پرامپت تحلیل که توسط ادمین تعریف شده
- * @returns {Promise<string>} متن تحلیل نهایی
- */
 export const analyzeConversation = async (conversationJson: string, analysisPrompt: string): Promise<string> => {
     try {
         const prompt = `
@@ -115,15 +111,36 @@ export const analyzeConversation = async (conversationJson: string, analysisProm
             Conversation:
             ${conversationJson}
             
-            Begin Analysis (in Persian):
+            Begin Analysis (output ONLY the JSON object, without any markdown formatting):
         `;
         const response = await openai.chat.completions.create({
             model: DEFAULT_MODEL,
-            messages: [ { role: "user", content: prompt } ]
+            messages: [ { role: "user", content: prompt } ],
+            response_format: { type: "json_object" },
         });
-        return response.choices[0]?.message?.content || "تحلیل مکالمه با خطا مواجه شد.";
-    } catch (error) {
+
+        const rawContent = response.choices[0]?.message?.content;
+        if (!rawContent) {
+            throw new Error("تحلیل مکالمه با خطا مواجه شد.");
+        }
+
+        const cleanJsonString = extractJsonFromString(rawContent);
+        
+        try {
+            JSON.parse(cleanJsonString);
+            return cleanJsonString;
+        } catch (e) {
+            console.error("Failed to parse cleaned JSON from AI:", cleanJsonString);
+            throw new Error("پاسخ دریافتی از سرویس تحلیل، فرمت معتبری ندارد.");
+        }
+
+    } catch (error: any) {
         console.error("Error analyzing conversation:", error);
-        return "تحلیل مکالمه با خطا مواجه شد.";
+        // در صورت بروز خطا، یک JSON پیش‌فرض و معتبر برمی‌گردانیم
+        return JSON.stringify({
+            score: 0,
+            report: `متاسفانه تحلیل این مکالمه با خطا مواجه شد. جزئیات خطا: ${error.message}`,
+            factor_scores: []
+        });
     }
 };
