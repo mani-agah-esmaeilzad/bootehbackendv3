@@ -150,6 +150,22 @@ export async function createTables() {
       }
     }
 
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS personality_assessment_applications (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        personality_assessment_id INT NOT NULL,
+        slug VARCHAR(255) NOT NULL,
+        full_name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) NOT NULL,
+        phone VARCHAR(50),
+        organization VARCHAR(255),
+        notes TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (personality_assessment_id) REFERENCES personality_assessments(id) ON DELETE CASCADE
+      )
+    `);
+    console.log("  - جدول 'personality_assessment_applications' ایجاد شد.");
+
     // جدول ارزیابی‌های هر کاربر
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS assessments (
