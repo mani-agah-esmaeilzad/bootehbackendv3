@@ -119,6 +119,13 @@ export async function createTables() {
         description TEXT NOT NULL,
         report_name VARCHAR(255) NOT NULL,
         highlights TEXT NOT NULL,
+        persona_name VARCHAR(255) DEFAULT 'کوچ شخصیت',
+        initial_prompt TEXT,
+        persona_prompt TEXT,
+        analysis_prompt TEXT,
+        has_timer BOOLEAN DEFAULT FALSE,
+        timer_duration INT DEFAULT NULL,
+        model VARCHAR(100) DEFAULT NULL,
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -126,9 +133,17 @@ export async function createTables() {
     `);
     console.log("  - جدول 'personality_assessments' ایجاد شد.");
 
+    await connection.execute(`ALTER TABLE personality_assessments ADD COLUMN IF NOT EXISTS persona_name VARCHAR(255) DEFAULT 'کوچ شخصیت'`);
+    await connection.execute(`ALTER TABLE personality_assessments ADD COLUMN IF NOT EXISTS initial_prompt TEXT`);
+    await connection.execute(`ALTER TABLE personality_assessments ADD COLUMN IF NOT EXISTS persona_prompt TEXT`);
+    await connection.execute(`ALTER TABLE personality_assessments ADD COLUMN IF NOT EXISTS analysis_prompt TEXT`);
+    await connection.execute(`ALTER TABLE personality_assessments ADD COLUMN IF NOT EXISTS has_timer BOOLEAN DEFAULT FALSE`);
+    await connection.execute(`ALTER TABLE personality_assessments ADD COLUMN IF NOT EXISTS timer_duration INT DEFAULT NULL`);
+    await connection.execute(`ALTER TABLE personality_assessments ADD COLUMN IF NOT EXISTS model VARCHAR(100) DEFAULT NULL`);
+
     const [personalityCountRows]: any = await connection.execute("SELECT COUNT(*) as count FROM personality_assessments");
     if (personalityCountRows[0].count === 0) {
-      const insertPlaceholders = PERSONALITY_TEST_SEED.map(() => "(?, ?, ?, ?, ?, ?, ?)").join(", ");
+      const insertPlaceholders = PERSONALITY_TEST_SEED.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
       const insertValues: any[] = [];
       PERSONALITY_TEST_SEED.forEach((test) => {
         insertValues.push(
@@ -138,17 +153,63 @@ export async function createTables() {
           test.description,
           test.report_name,
           JSON.stringify(test.highlights),
+          test.persona_name,
+          test.initial_prompt,
+          test.persona_prompt,
+          test.analysis_prompt,
+          test.has_timer ?? false,
+          test.timer_duration ?? null,
+          test.model ?? null,
           test.is_active ?? true
         );
       });
       if (insertPlaceholders.length > 0) {
         await connection.execute(
-          `INSERT INTO personality_assessments (name, slug, tagline, description, report_name, highlights, is_active) VALUES ${insertPlaceholders}`,
+          `INSERT INTO personality_assessments (name, slug, tagline, description, report_name, highlights, persona_name, initial_prompt, persona_prompt, analysis_prompt, has_timer, timer_duration, model, is_active) VALUES ${insertPlaceholders}`,
           insertValues
         );
         console.log("  - داده‌های اولیه آزمون‌های شخصیتی اضافه شد.");
       }
+    } else {
+      for (const test of PERSONALITY_TEST_SEED) {
+        await connection.execute(
+          `UPDATE personality_assessments 
+             SET tagline = ?, description = ?, report_name = ?, highlights = ?, persona_name = ?, initial_prompt = ?, persona_prompt = ?, analysis_prompt = ?, has_timer = ?, timer_duration = ?, model = ?, is_active = ? 
+           WHERE slug = ?`,
+          [
+            test.tagline,
+            test.description,
+            test.report_name,
+            JSON.stringify(test.highlights),
+            test.persona_name,
+            test.initial_prompt,
+            test.persona_prompt,
+            test.analysis_prompt,
+            test.has_timer ?? false,
+            test.timer_duration ?? null,
+            test.model ?? null,
+            test.is_active ?? true,
+            test.slug,
+          ]
+        );
+      }
     }
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS personality_sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        personality_assessment_id INT NOT NULL,
+        session_uuid VARCHAR(64) NOT NULL UNIQUE,
+        status ENUM('in-progress','completed','cancelled') DEFAULT 'in-progress',
+        results JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (personality_assessment_id) REFERENCES personality_assessments(id) ON DELETE CASCADE
+      )
+    `);
+    console.log("  - جدول 'personality_sessions' ایجاد شد.");
 
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS personality_assessment_applications (
