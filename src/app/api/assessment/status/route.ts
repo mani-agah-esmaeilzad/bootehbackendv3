@@ -20,6 +20,7 @@ export async function GET(req: Request) {
                 q.id, 
                 q.name as title, 
                 q.description,
+                q.category,
                 COALESCE(a.status, 'pending') as status,
                 q.display_order
              FROM questionnaires q
@@ -40,7 +41,10 @@ export async function GET(req: Request) {
             } else if (currentFound && a.status === 'pending') {
                 a.status = 'locked';
             }
-            return a;
+            return {
+                ...a,
+                category: a.category
+            };
         });
 
         return NextResponse.json({ success: true, data: processedAssessments });
