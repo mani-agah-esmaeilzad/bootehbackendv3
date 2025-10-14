@@ -43,9 +43,11 @@ export async function POST(
         }
         
         const questionnaireId = parseInt(params.id, 10);
-        const { message: userMessage, session_id: sessionId } = await request.json();
+        const { message: rawMessage, session_id: sessionId, autoStart } = await request.json();
+        const isAutoStart = Boolean(autoStart);
+        const userMessage: string = typeof rawMessage === 'string' ? rawMessage : '';
 
-        if (isNaN(questionnaireId) || !userMessage || !sessionId) {
+        if (isNaN(questionnaireId) || !sessionId || (!isAutoStart && (!userMessage || userMessage.trim().length === 0))) {
             return NextResponse.json({ success: false, message: 'اطلاعات ارسالی ناقص است' }, { status: 400 });
         }
 
@@ -53,7 +55,8 @@ export async function POST(
             questionnaireId,
             sessionId,
             userId: session.user.userId,
-            userMessage
+            userMessage,
+            autoStart: isAutoStart
         });
 
         const [assessmentRows]: any = await db.query(
@@ -75,8 +78,19 @@ export async function POST(
         } = assessmentRows[0];
         
         const results = resultsString ? JSON.parse(resultsString) : { history: [] };
-        const history: ChatMessage[] = results.history || [];
-        const updatedHistory: ChatMessage[] = [...history, { role: 'user', content: userMessage }];
+        const history: ChatMessage[] = Array.isArray(results.history) ? results.history : [];
+        const updatedHistory: ChatMessage[] = [...history];
+        const historyForModel: ChatMessage[] = [...history];
+
+        if (isAutoStart) {
+            historyForModel.push({
+                role: 'user',
+                content: 'گفتگو را در نقش خود آغاز کن، کاربر را خوش‌آمد بگو، سناریوی ارزیابی را معرفی کن و از او بخواه آماده پاسخ‌گویی باشد. پاسخ را به زبان فارسی و با لحنی حرفه‌ای ارائه بده.',
+            });
+        } else {
+            updatedHistory.push({ role: 'user', content: userMessage });
+            historyForModel.push({ role: 'user', content: userMessage });
+        }
         
         let finalAiResponse: string | null = null;
         let finalPersonaName: string = persona_name;
@@ -86,7 +100,7 @@ export async function POST(
         let needsIntervention = false;
 
         // مرحله ۱: آیا شخصیت دوم (مبصر) فعال است؟
-        if (character_count === 2 && secondary_persona_prompt) {
+        if (!isAutoStart && character_count === 2 && secondary_persona_prompt) {
             // مرحله ۲: از مبصر بخواه که پاسخ را به 'VALID' یا 'INVALID' طبقه‌بندی کند
             const classificationResponse = await generateResponse(secondary_persona_prompt, updatedHistory);
             
@@ -105,9 +119,12 @@ export async function POST(
             // اینجا از پرامپت اصلی استفاده می‌کنیم تا لحن یکپارچه بماند، اما با وظیفه‌ای متفاوت
             finalAiResponse = await generateResponse(interventionPrompt, updatedHistory);
             finalPersonaName = secondary_persona_name || persona_name; // نام مبصر را نمایش بده
+        } else if (isAutoStart) {
+            finalAiResponse = await generateResponse(persona_prompt, historyForModel);
+            finalPersonaName = persona_name;
         } else {
             // اگر پاسخ معتبر بود، از مشاور اصلی پاسخ عادی را بگیر
-            finalAiResponse = await generateResponse(persona_prompt, updatedHistory);
+            finalAiResponse = await generateResponse(persona_prompt, historyForModel);
             finalPersonaName = persona_name;
         }
 
