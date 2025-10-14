@@ -25,6 +25,13 @@ export async function POST(
             return NextResponse.json({ success: false, message: 'اطلاعات ارسالی ناقص است' }, { status: 400 });
         }
 
+        console.log('--- ASSESSMENT CHAT REQUEST ---', {
+            questionnaireId,
+            sessionId,
+            userId: session.user.userId,
+            userMessage
+        });
+
         const [assessmentRows]: any = await db.query(
             `SELECT 
                 q.persona_prompt, q.persona_name, q.secondary_persona_prompt,
@@ -85,6 +92,12 @@ export async function POST(
         if (!finalAiResponse) {
             return NextResponse.json({ success: false, message: 'پاسخی از سرویس هوش مصنوعی دریافت نشد' }, { status: 500 });
         }
+
+        console.log('--- ASSESSMENT CHAT RESPONSE ---', {
+            sessionId,
+            personaName: finalPersonaName,
+            replyPreview: finalAiResponse.slice(0, 120).trim()
+        });
 
         updatedHistory.push({ role: 'assistant', content: finalAiResponse });
 
