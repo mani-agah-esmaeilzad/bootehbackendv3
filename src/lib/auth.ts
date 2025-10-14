@@ -63,14 +63,22 @@ export const authenticateToken = (token: string): UserPayload | null => {
  */
 export const getSession = async (): Promise<{ user: Omit<UserPayload, 'iat' | 'exp'> | null }> => {
   const cookieStore = cookies();
+  try {
+    const cookieNames = cookieStore.getAll().map((cookie) => cookie.name);
+    console.log('Auth Debug - incoming cookies:', cookieNames);
+  } catch (error) {
+    console.log('Auth Debug - failed to read cookies:', error);
+  }
   const token = cookieStore.get('authToken')?.value;
 
   if (!token) {
+    console.log('Auth Debug - authToken cookie missing on request');
     return { user: null };
   }
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as UserPayload;
+    console.log('Auth Debug - token decoded for user:', decoded.userId);
     return { 
         user: {
             userId: decoded.userId,
@@ -81,6 +89,7 @@ export const getSession = async (): Promise<{ user: Omit<UserPayload, 'iat' | 'e
     };
   } catch (error) {
     // If token is invalid or expired
+    console.log('Auth Debug - token verification failed:', error);
     return { user: null };
   }
 };

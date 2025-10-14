@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { getSession, authenticateToken } from '@/lib/auth';
 import { generateResponse } from '@/lib/ai';
 import type { ChatMessage } from '@/lib/ai';
 
@@ -13,7 +13,31 @@ export async function POST(
     { params }: { params: { id: string } }
 ) {
     try {
-        const session = await getSession();
+        let session = await getSession();
+        if (!session.user?.userId) {
+            const authHeader = request.headers.get('authorization');
+            const bearerToken = authHeader && authHeader.startsWith('Bearer ')
+                ? authHeader.substring(7)
+                : null;
+
+            if (bearerToken) {
+                const decoded = authenticateToken(bearerToken);
+                if (decoded) {
+                    console.log('Auth Debug - using Authorization header for user:', decoded.userId);
+                    session = {
+                        user: {
+                            userId: decoded.userId,
+                            username: decoded.username,
+                            role: decoded.role,
+                            organizationId: decoded.organizationId,
+                        },
+                    };
+                } else {
+                    console.log('Auth Debug - Authorization header token invalid');
+                }
+            }
+        }
+
         if (!session.user?.userId) {
             return NextResponse.json({ success: false, message: 'توکن ارائه نشده یا نامعتبر است' }, { status: 401 });
         }
