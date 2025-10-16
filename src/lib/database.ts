@@ -318,6 +318,56 @@ export async function createTables() {
       )
     `);
     console.log("  - جدول 'blog_posts' ایجاد شد.");
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS mystery_assessments (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL UNIQUE,
+        short_description TEXT NOT NULL,
+        intro_message TEXT NOT NULL,
+        guide_name VARCHAR(255) DEFAULT 'رازمَستر',
+        system_prompt TEXT NOT NULL,
+        analysis_prompt TEXT,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("  - جدول 'mystery_assessments' ایجاد شد.");
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS mystery_assessment_images (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        mystery_assessment_id INT NOT NULL,
+        image_url VARCHAR(500) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        description TEXT,
+        ai_notes TEXT,
+        display_order INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (mystery_assessment_id) REFERENCES mystery_assessments(id) ON DELETE CASCADE
+      )
+    `);
+    console.log("  - جدول 'mystery_assessment_images' ایجاد شد.");
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS mystery_sessions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        mystery_assessment_id INT NOT NULL,
+        session_uuid VARCHAR(64) NOT NULL UNIQUE,
+        status ENUM('in-progress','completed') DEFAULT 'in-progress',
+        conversation JSON,
+        summary JSON,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (mystery_assessment_id) REFERENCES mystery_assessments(id) ON DELETE CASCADE
+      )
+    `);
+    console.log("  - جدول 'mystery_sessions' ایجاد شد.");
     
     // --- پایان جداول جدید ---
 

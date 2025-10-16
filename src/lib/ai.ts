@@ -144,3 +144,31 @@ export const analyzeConversation = async (conversationJson: string, analysisProm
         });
     }
 };
+
+type MysteryImageInfo = {
+  title: string;
+  description?: string | null;
+  ai_notes?: string | null;
+};
+
+export const buildMysterySystemInstruction = (
+  baseInstruction: string,
+  images: MysteryImageInfo[]
+): string => {
+  if (!Array.isArray(images) || images.length === 0) {
+    return baseInstruction;
+  }
+
+  const imageContext = images
+    .map((image, index) => {
+      const parts = [
+        `تصویر ${index + 1}: ${image.title}`,
+        image.description ? `توضیحات قابل نمایش: ${image.description}` : null,
+        image.ai_notes ? `نکات راهنما برای تحلیل: ${image.ai_notes}` : null,
+      ].filter(Boolean);
+      return parts.join("\n");
+    })
+    .join("\n\n");
+
+  return `${baseInstruction.trim()}\n\nاطلاعات زمینه‌ای درباره تصاویر:\n${imageContext}`;
+};
