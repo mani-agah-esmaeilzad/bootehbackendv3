@@ -9,8 +9,12 @@ export const dynamic = 'force-dynamic';
 
 const imageSchema = z.object({
   image_url: z
-    .string()
-    .url({ message: 'آدرس تصویر معتبر نیست.' }),
+    .string({ required_error: 'وارد کردن آدرس تصویر الزامی است.' })
+    .min(1, { message: 'آدرس تصویر نباید خالی باشد.' })
+    .refine((value) => {
+      const trimmed = value.trim();
+      return /^https?:\/\//i.test(trimmed) || trimmed.startsWith('/');
+    }, { message: 'آدرس تصویر معتبر نیست. از لینک کامل یا مسیر نسبی (شروع با /) استفاده کنید.' }),
   title: z.string().min(3, { message: 'عنوان تصویر باید حداقل ۳ کاراکتر باشد.' }),
   description: z.string().optional(),
   ai_notes: z.string().optional(),
@@ -140,7 +144,7 @@ export async function POST(request: Request) {
 
       const imageValues = images.map((image, index) => [
         assessmentId,
-        image.image_url,
+        image.image_url.trim(),
         image.title.trim(),
         image.description?.trim() || null,
         image.ai_notes?.trim() || null,
