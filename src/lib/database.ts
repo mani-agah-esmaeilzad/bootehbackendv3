@@ -301,6 +301,23 @@ export async function createTables() {
       )
     `);
     console.log("  - جدول 'organization_users' ایجاد شد.");
+
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS blog_posts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        slug VARCHAR(255) NOT NULL UNIQUE,
+        excerpt TEXT,
+        content LONGTEXT NOT NULL,
+        cover_image_url VARCHAR(500),
+        author VARCHAR(100),
+        is_published BOOLEAN DEFAULT TRUE,
+        published_at TIMESTAMP NULL DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("  - جدول 'blog_posts' ایجاد شد.");
     
     // --- پایان جداول جدید ---
 
