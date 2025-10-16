@@ -7,6 +7,23 @@ import { getSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
+const normalizeImagePath = (value: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    try {
+      const parsed = new URL(trimmed);
+      const pathname = parsed.pathname || '';
+      const search = parsed.search || '';
+      const hash = parsed.hash || '';
+      return pathname.startsWith('/') ? `${pathname}${search}${hash}` : `/${pathname}${search}${hash}`;
+    } catch {
+      return trimmed;
+    }
+  }
+  return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+};
+
 const imageSchema = z.object({
   id: z.number().optional(),
   image_url: z
@@ -109,7 +126,7 @@ export async function PUT(
 
       const imageValues = images.map((image, index) => [
         assessmentId,
-        image.image_url.trim(),
+        normalizeImagePath(image.image_url),
         image.title.trim(),
         image.description?.trim() || null,
         image.ai_notes?.trim() || null,
