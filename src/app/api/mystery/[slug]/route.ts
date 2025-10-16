@@ -17,7 +17,7 @@ export async function GET(
 
     const [testRows]: any = await db.query(
       `
-        SELECT id, name, slug, short_description, intro_message, created_at
+        SELECT id, name, slug, short_description, intro_message, guide_name, created_at
         FROM mystery_assessments
         WHERE slug = ? AND is_active = 1
         LIMIT 1
