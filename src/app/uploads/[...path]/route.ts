@@ -13,6 +13,10 @@ const MIME_MAP: Record<string, string> = {
   '.gif': 'image/gif',
   '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
+  '.pdf': 'application/pdf',
+  '.mp4': 'video/mp4',
+  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
 export async function GET(
@@ -21,10 +25,15 @@ export async function GET(
 ) {
   try {
     const segments = params.path ?? [];
+
     if (!Array.isArray(segments) || segments.length === 0) {
-      return NextResponse.json({ success: false, message: 'مسیر فایل نامعتبر است.' }, { status: 400 });
+      return NextResponse.json(
+        { success: false, message: 'مسیر فایل نامعتبر است.' },
+        { status: 400 }
+      );
     }
 
+    // جلوگیری از مسیرهای خطرناک
     const safeSegments = segments.filter(Boolean).map((segment) => {
       const decoded = decodeURIComponent(segment);
       if (decoded.includes('..') || decoded.startsWith('/') || decoded.includes('\\')) {
@@ -38,7 +47,10 @@ export async function GET(
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_MAP[ext] || 'application/octet-stream';
 
-    return new Response(data, {
+    // ✅ تبدیل امن Buffer به ArrayBuffer برای Response
+    const arrayBuffer = new Uint8Array(data).buffer;
+
+    return new Response(arrayBuffer, {
       status: 200,
       headers: {
         'Content-Type': contentType,
@@ -47,9 +59,16 @@ export async function GET(
     });
   } catch (error: any) {
     if (error?.code === 'ENOENT') {
-      return NextResponse.json({ success: false, message: 'فایل یافت نشد.' }, { status: 404 });
+      return NextResponse.json(
+        { success: false, message: 'فایل یافت نشد.' },
+        { status: 404 }
+      );
     }
+
     console.error('Static upload serving error:', error);
-    return NextResponse.json({ success: false, message: 'خطای داخلی سرور' }, { status: 500 });
+    return NextResponse.json(
+      { success: false, message: 'خطای داخلی سرور' },
+      { status: 500 }
+    );
   }
 }
