@@ -92,7 +92,7 @@ export async function POST(
             historyForModel.push({ role: 'user', content: userMessage });
         }
         
-        let finalAiResponse: string | null = null;
+        let rawAiResponse: string | null = null;
         let finalPersonaName: string = persona_name;
 
         // --- *** FINAL FIX: Implementing the new 2-step CLASSIFICATION logic *** ---
@@ -103,7 +103,7 @@ export async function POST(
         if (!isAutoStart && character_count === 2 && secondary_persona_prompt) {
             // مرحله ۲: از مبصر بخواه که پاسخ را به 'VALID' یا 'INVALID' طبقه‌بندی کند
             const classificationResponse = await generateResponse(secondary_persona_prompt, updatedHistory);
-            
+
             console.log("--- SUPERVISOR CLASSIFICATION --- :", classificationResponse?.trim().toUpperCase());
 
             if (classificationResponse?.trim().toUpperCase() === 'INVALID') {
@@ -117,42 +117,51 @@ export async function POST(
             const interventionPrompt = `The user has provided an invalid or off-topic response. Generate a short, firm, and guiding message in Persian to get the user back on track.`;
             // برای تولید پیام مداخله، می‌توانیم از پرامپت شخصیت اصلی یا دوم استفاده کنیم
             // اینجا از پرامپت اصلی استفاده می‌کنیم تا لحن یکپارچه بماند، اما با وظیفه‌ای متفاوت
-            finalAiResponse = await generateResponse(interventionPrompt, updatedHistory);
+            rawAiResponse = await generateResponse(interventionPrompt, updatedHistory);
             finalPersonaName = secondary_persona_name || persona_name; // نام مبصر را نمایش بده
         } else if (isAutoStart) {
-            finalAiResponse = await generateResponse(persona_prompt, historyForModel);
+            rawAiResponse = await generateResponse(persona_prompt, historyForModel);
             finalPersonaName = persona_name;
         } else {
             // اگر پاسخ معتبر بود، از مشاور اصلی پاسخ عادی را بگیر
-            finalAiResponse = await generateResponse(persona_prompt, historyForModel);
+            rawAiResponse = await generateResponse(persona_prompt, historyForModel);
             finalPersonaName = persona_name;
         }
 
         // --- *** End of new logic *** ---
 
-        if (!finalAiResponse) {
+        if (!rawAiResponse) {
             return NextResponse.json({ success: false, message: 'پاسخی از سرویس هوش مصنوعی دریافت نشد' }, { status: 500 });
         }
+
+        const COMPLETION_TOKENS = ['__CONVERSATION_END__', '[END_ASSESSMENT]'];
+        const matchedToken = COMPLETION_TOKENS.find(token => rawAiResponse?.includes(token));
+        const cleanedAiResponse = matchedToken
+            ? rawAiResponse.replaceAll(matchedToken, '').trim()
+            : rawAiResponse.trim();
+        const isConversationComplete = Boolean(matchedToken);
 
         console.log('--- ASSESSMENT CHAT RESPONSE ---', {
             sessionId,
             personaName: finalPersonaName,
-            replyPreview: finalAiResponse.slice(0, 120).trim()
+            replyPreview: cleanedAiResponse.slice(0, 120)
         });
 
-        updatedHistory.push({ role: 'assistant', content: finalAiResponse });
+        updatedHistory.push({ role: 'assistant', content: cleanedAiResponse });
 
         await db.query(
             "UPDATE assessments SET results = ? WHERE session_id = ?",
             [JSON.stringify({ ...results, history: updatedHistory }), sessionId]
         );
 
-        return NextResponse.json({ 
-            success: true, 
-            data: { 
-                reply: finalAiResponse,
-                personaName: finalPersonaName 
-            } 
+        return NextResponse.json({
+            success: true,
+            data: {
+                reply: cleanedAiResponse,
+                personaName: finalPersonaName,
+                isComplete: isConversationComplete,
+                completionToken: matchedToken || null,
+            }
         });
 
     } catch (error) {
