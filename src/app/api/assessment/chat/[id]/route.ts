@@ -135,11 +135,13 @@ export async function POST(
         }
 
         const COMPLETION_TOKENS = ['__CONVERSATION_END__', '[END_ASSESSMENT]'];
-        const matchedToken = COMPLETION_TOKENS.find(token => rawAiResponse?.includes(token));
+        const normalizedResponse = rawAiResponse.replace(/\s+/g, '').toUpperCase();
+        const matchedToken = COMPLETION_TOKENS.find(token => normalizedResponse.includes(token.replace(/\s+/g, '').toUpperCase()));
         const cleanedAiResponse = matchedToken
             ? rawAiResponse.split(matchedToken).join('').trim()
             : rawAiResponse.trim();
         const isConversationComplete = Boolean(matchedToken);
+        console.log('CONVERSATION COMPLETE?', isConversationComplete);
 
         console.log('--- ASSESSMENT CHAT RESPONSE ---', {
             sessionId,
