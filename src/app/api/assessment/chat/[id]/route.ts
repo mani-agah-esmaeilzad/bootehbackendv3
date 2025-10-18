@@ -41,7 +41,7 @@ export async function POST(
         if (!session.user?.userId) {
             return NextResponse.json({ success: false, message: 'توکن ارائه نشده یا نامعتبر است' }, { status: 401 });
         }
-        
+
         const questionnaireId = parseInt(params.id, 10);
         const { message: rawMessage, session_id: sessionId, autoStart } = await request.json();
         const isAutoStart = Boolean(autoStart);
@@ -71,12 +71,12 @@ export async function POST(
         if (assessmentRows.length === 0 || assessmentRows[0].user_id !== session.user.userId) {
             return NextResponse.json({ success: false, message: 'جلسه ارزیابی یافت نشد یا متعلق به شما نیست' }, { status: 404 });
         }
-        
-        const { 
+
+        const {
             persona_prompt, persona_name, secondary_persona_prompt,
-            secondary_persona_name, character_count, results: resultsString 
+            secondary_persona_name, character_count, results: resultsString
         } = assessmentRows[0];
-        
+
         const results = resultsString ? JSON.parse(resultsString) : { history: [] };
         const history: ChatMessage[] = Array.isArray(results.history) ? results.history : [];
         const updatedHistory: ChatMessage[] = [...history];
@@ -91,7 +91,7 @@ export async function POST(
             updatedHistory.push({ role: 'user', content: userMessage });
             historyForModel.push({ role: 'user', content: userMessage });
         }
-        
+
         let rawAiResponse: string | null = null;
         let finalPersonaName: string = persona_name;
 
@@ -137,7 +137,7 @@ export async function POST(
         const COMPLETION_TOKENS = ['__CONVERSATION_END__', '[END_ASSESSMENT]'];
         const matchedToken = COMPLETION_TOKENS.find(token => rawAiResponse?.includes(token));
         const cleanedAiResponse = matchedToken
-            ? rawAiResponse.replaceAll(matchedToken, '').trim()
+            ? rawAiResponse.split(matchedToken).join('').trim()
             : rawAiResponse.trim();
         const isConversationComplete = Boolean(matchedToken);
 
