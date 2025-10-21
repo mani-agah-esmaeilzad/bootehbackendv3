@@ -172,3 +172,62 @@ export const buildMysterySystemInstruction = (
 
   return `${baseInstruction.trim()}\n\nاطلاعات زمینه‌ای درباره تصاویر:\n${imageContext}`;
 };
+
+type MysteryBubbleMessageInput = {
+  title: string;
+  aiNotes?: string | null;
+  assessmentName?: string | null;
+  guideName?: string | null;
+  shortDescription?: string | null;
+  existingText?: string | null;
+};
+
+export const generateMysteryBubbleText = async ({
+  title,
+  aiNotes,
+  assessmentName,
+  guideName,
+  shortDescription,
+  existingText,
+}: MysteryBubbleMessageInput): Promise<string> => {
+  const contextParts = [
+    `عنوان تصویر: ${title}`.trim(),
+    assessmentName ? `نام سناریو: ${assessmentName}` : null,
+    guideName ? `نام شخصیت راهنما: ${guideName}` : null,
+    shortDescription ? `خلاصه سناریو: ${shortDescription}` : null,
+    aiNotes ? `نکات کلیدی تصویر: ${aiNotes}` : null,
+    existingText ? `اگر متن فعلی طبیعی نبود، بهترش کن: ${existingText}` : null,
+  ].filter(Boolean);
+
+  const systemPrompt = [
+    "شما یک نویسنده خلاق فارسی‌زبان هستید که باید برای حباب گفتگوی تصویری یک پیام کوتاه بسازید.",
+    "پیام باید صمیمی، کمی رازآلود و دعوت‌کننده به ادامه کشف باشد.",
+    "حداکثر دو جمله و حداکثر ۱۸۰ کاراکتر باشد.",
+    "از گیومه و نشانه‌های نقل‌قول استفاده نکن، از اموجی استفاده نکن.",
+    "از لحن دوم‌شخص مفرد استفاده کن و مستقیماً مخاطب را خطاب قرار بده.",
+    "خروجی فقط متن باشد (بدون توضیح اضافه).",
+  ].join(" ");
+
+  const userPrompt = contextParts.join("\n");
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: DEFAULT_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.6,
+    });
+
+    const raw = response.choices[0]?.message?.content?.trim();
+    if (!raw) {
+      throw new Error("متن مناسبی از سرویس هوش مصنوعی دریافت نشد.");
+    }
+
+    return raw.replace(/^[\"“”]+|[\"“”]+$/g, "").trim();
+  } catch (error) {
+    console.error("Error generating mystery bubble text:", error);
+    throw new Error("تولید پیام حباب گفتگو با خطا مواجه شد.");
+  }
+};
