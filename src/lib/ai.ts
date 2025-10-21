@@ -180,6 +180,26 @@ type MysteryBubbleMessageInput = {
   guideName?: string | null;
   shortDescription?: string | null;
   existingText?: string | null;
+  bubblePrompt?: string | null;
+  imageUrl?: string | null;
+};
+
+const fetchImageAsDataUrl = async (imageUrl?: string | null): Promise<string | null> => {
+  if (!imageUrl) return null;
+  try {
+    const response = await fetch(imageUrl);
+    if (!response.ok) {
+      console.warn("Failed to fetch image for bubble generation:", response.statusText);
+      return null;
+    }
+    const contentType = response.headers.get("content-type") ?? "image/jpeg";
+    const arrayBuffer = await response.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    return `data:${contentType};base64,${base64}`;
+  } catch (error) {
+    console.error("Error fetching image for bubble text generation:", error);
+    return null;
+  }
 };
 
 export const generateMysteryBubbleText = async ({
@@ -189,6 +209,8 @@ export const generateMysteryBubbleText = async ({
   guideName,
   shortDescription,
   existingText,
+  bubblePrompt,
+  imageUrl,
 }: MysteryBubbleMessageInput): Promise<string> => {
   const contextParts = [
     `عنوان تصویر: ${title}`.trim(),
@@ -200,22 +222,41 @@ export const generateMysteryBubbleText = async ({
   ].filter(Boolean);
 
   const systemPrompt = [
-    "شما یک نویسنده خلاق فارسی‌زبان هستید که باید برای حباب گفتگوی تصویری یک پیام کوتاه بسازید.",
+    "شما یک نویسنده خلاق فارسی‌زبان هستید که باید برای حباب گفتگوی تصویری یک پیام کوتاه و طبیعی بسازید.",
+    "ابتدا تصویر را تحلیل کن و سپس متنی بنویس که انگار روی تصویر چاپ شده است.",
     "پیام باید صمیمی، کمی رازآلود و دعوت‌کننده به ادامه کشف باشد.",
     "حداکثر دو جمله و حداکثر ۱۸۰ کاراکتر باشد.",
     "از گیومه و نشانه‌های نقل‌قول استفاده نکن، از اموجی استفاده نکن.",
     "از لحن دوم‌شخص مفرد استفاده کن و مستقیماً مخاطب را خطاب قرار بده.",
+    bubblePrompt ? `استایل و حال‌وهوای مخصوص: ${bubblePrompt}` : null,
     "خروجی فقط متن باشد (بدون توضیح اضافه).",
-  ].join(" ");
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-  const userPrompt = contextParts.join("\n");
+  const userPromptText =
+    contextParts.length > 0
+      ? contextParts.join("\n")
+      : "بر اساس تصویر ارسالی، یک پیام کوتاه و الهام‌بخش تولید کن.";
+
+  const imageDataUrl = await fetchImageAsDataUrl(imageUrl);
+  const userMessage: ChatCompletionMessageParam =
+    imageDataUrl
+      ? {
+          role: "user",
+          content: [
+            { type: "text", text: userPromptText },
+            { type: "image_url", image_url: { url: imageDataUrl } },
+          ],
+        }
+      : { role: "user", content: userPromptText };
 
   try {
     const response = await openai.chat.completions.create({
       model: DEFAULT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
+        userMessage,
       ],
       temperature: 0.6,
     });

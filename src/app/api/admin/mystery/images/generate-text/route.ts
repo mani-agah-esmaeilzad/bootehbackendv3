@@ -9,11 +9,13 @@ export const dynamic = 'force-dynamic';
 
 const requestSchema = z.object({
   title: z.string({ required_error: 'عنوان تصویر الزامی است.' }).min(3, { message: 'عنوان تصویر باید حداقل ۳ کاراکتر باشد.' }),
+  image_url: z.string({ required_error: 'آدرس تصویر الزامی است.' }).min(1, { message: 'آدرس تصویر نباید خالی باشد.' }),
   ai_notes: z.string().optional(),
   assessment_name: z.string().optional(),
   guide_name: z.string().optional(),
   short_description: z.string().optional(),
   existing_text: z.string().optional(),
+  bubble_prompt: z.string().optional(),
 });
 
 const ensureAdmin = async () => {
@@ -41,6 +43,22 @@ export async function POST(request: Request) {
     }
 
     const payload = validation.data;
+    const requestUrl = new URL(request.url);
+    const assetBase =
+      process.env.NEXT_PUBLIC_ASSET_ORIGIN ||
+      process.env.APP_BASE_URL ||
+      requestUrl.origin;
+
+    const resolveImageUrl = (value: string): string => {
+      if (!value) return value;
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        return value;
+      }
+      if (value.startsWith('/')) {
+        return `${assetBase}${value}`;
+      }
+      return `${assetBase}/${value}`;
+    };
 
     const text = await generateMysteryBubbleText({
       title: payload.title.trim(),
@@ -49,6 +67,8 @@ export async function POST(request: Request) {
       guideName: payload.guide_name?.trim() || null,
       shortDescription: payload.short_description?.trim() || null,
       existingText: payload.existing_text?.trim() || null,
+      bubblePrompt: payload.bubble_prompt?.trim() || null,
+      imageUrl: resolveImageUrl(payload.image_url.trim()),
     });
 
     return NextResponse.json({

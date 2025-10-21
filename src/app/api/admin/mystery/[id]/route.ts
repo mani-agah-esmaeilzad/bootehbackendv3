@@ -50,6 +50,7 @@ const assessmentSchema = z.object({
   guide_name: z.string().min(2, { message: 'نام راهنمای گفتگو باید حداقل ۲ کاراکتر باشد.' }).optional(),
   system_prompt: z.string().min(30, { message: 'پرامپت سیستم باید حداقل ۳۰ کاراکتر باشد.' }),
   analysis_prompt: z.string().optional(),
+  bubble_prompt: z.string().optional(),
   is_active: z.boolean().optional().default(true),
   images: z.array(imageSchema).min(1, { message: 'حداقل یک تصویر باید ثبت شود.' }),
 });
@@ -91,6 +92,7 @@ export async function PUT(
       guide_name,
       system_prompt,
       analysis_prompt,
+      bubble_prompt,
       is_active,
       images,
     } = validation.data;
@@ -103,7 +105,7 @@ export async function PUT(
       await connection.query(
         `
           UPDATE mystery_assessments
-          SET name = ?, slug = ?, short_description = ?, intro_message = ?, guide_name = ?, system_prompt = ?, analysis_prompt = ?, is_active = ?, updated_at = NOW()
+          SET name = ?, slug = ?, short_description = ?, intro_message = ?, guide_name = ?, system_prompt = ?, analysis_prompt = ?, bubble_prompt = ?, is_active = ?, updated_at = NOW()
           WHERE id = ?
         `,
         [
@@ -114,6 +116,7 @@ export async function PUT(
           (guide_name || 'رازمَستر').trim(),
           system_prompt.trim(),
           analysis_prompt?.trim() || null,
+          bubble_prompt?.trim() || null,
           is_active ? 1 : 0,
           assessmentId,
         ]

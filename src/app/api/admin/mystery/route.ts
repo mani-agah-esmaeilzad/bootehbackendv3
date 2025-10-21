@@ -49,6 +49,7 @@ const assessmentSchema = z.object({
   guide_name: z.string().min(2, { message: 'نام راهنمای گفتگو باید حداقل ۲ کاراکتر باشد.' }).optional(),
   system_prompt: z.string().min(30, { message: 'پرامپت سیستم باید حداقل ۳۰ کاراکتر باشد.' }),
   analysis_prompt: z.string().optional(),
+  bubble_prompt: z.string().optional(),
   is_active: z.boolean().optional().default(true),
   images: z.array(imageSchema).min(1, { message: 'حداقل یک تصویر باید ثبت شود.' }),
 });
@@ -68,7 +69,7 @@ export async function GET() {
 
     const [tests]: any = await db.query(
       `
-        SELECT id, name, slug, short_description, intro_message, guide_name, system_prompt, analysis_prompt, is_active, created_at, updated_at
+        SELECT id, name, slug, short_description, intro_message, guide_name, system_prompt, analysis_prompt, bubble_prompt, is_active, created_at, updated_at
         FROM mystery_assessments
         ORDER BY created_at DESC
       `
@@ -99,6 +100,7 @@ export async function GET() {
 
     const data = tests.map((test: any) => ({
       ...test,
+      bubble_prompt: test.bubble_prompt ?? null,
       images: imagesByAssessment[test.id] || [],
     }));
 
@@ -130,6 +132,7 @@ export async function POST(request: Request) {
       guide_name,
       system_prompt,
       analysis_prompt,
+      bubble_prompt,
       is_active,
       images,
     } = validation.data;
@@ -142,8 +145,8 @@ export async function POST(request: Request) {
       const [result]: any = await connection.query(
         `
           INSERT INTO mystery_assessments
-            (name, slug, short_description, intro_message, guide_name, system_prompt, analysis_prompt, is_active)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (name, slug, short_description, intro_message, guide_name, system_prompt, analysis_prompt, bubble_prompt, is_active)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `,
         [
           name.trim(),
@@ -153,6 +156,7 @@ export async function POST(request: Request) {
           (guide_name || 'رازمَستر').trim(),
           system_prompt.trim(),
           analysis_prompt?.trim() || null,
+          bubble_prompt?.trim() || null,
           is_active ? 1 : 0,
         ]
       );

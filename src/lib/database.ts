@@ -329,6 +329,7 @@ export async function createTables() {
         guide_name VARCHAR(255) DEFAULT 'رازمَستر',
         system_prompt TEXT NOT NULL,
         analysis_prompt TEXT,
+        bubble_prompt TEXT,
         is_active BOOLEAN DEFAULT TRUE,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -368,7 +369,12 @@ export async function createTables() {
       )
     `);
     console.log("  - جدول 'mystery_sessions' ایجاد شد.");
-    
+
+    await connection.execute(`
+      ALTER TABLE mystery_assessments
+      ADD COLUMN IF NOT EXISTS bubble_prompt TEXT AFTER analysis_prompt
+    `);
+
     // --- پایان جداول جدید ---
 
     console.log('✅ فرآیند ایجاد جداول با موفقیت به پایان رسید.');
