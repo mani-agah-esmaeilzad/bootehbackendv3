@@ -184,24 +184,6 @@ type MysteryBubbleMessageInput = {
   imageUrl?: string | null;
 };
 
-const fetchImageAsDataUrl = async (imageUrl?: string | null): Promise<string | null> => {
-  if (!imageUrl) return null;
-  try {
-    const response = await fetch(imageUrl);
-    if (!response.ok) {
-      console.warn("Failed to fetch image for bubble generation:", response.statusText);
-      return null;
-    }
-    const contentType = response.headers.get("content-type") ?? "image/jpeg";
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    return `data:${contentType};base64,${base64}`;
-  } catch (error) {
-    console.error("Error fetching image for bubble text generation:", error);
-    return null;
-  }
-};
-
 export const generateMysteryBubbleText = async ({
   title,
   aiNotes,
@@ -239,17 +221,18 @@ export const generateMysteryBubbleText = async ({
       ? contextParts.join("\n")
       : "بر اساس تصویر ارسالی، یک پیام کوتاه و الهام‌بخش تولید کن.";
 
-  const imageDataUrl = await fetchImageAsDataUrl(imageUrl);
-  const userMessage: ChatCompletionMessageParam =
-    imageDataUrl
-      ? {
-          role: "user",
-          content: [
-            { type: "text", text: userPromptText },
-            { type: "image_url", image_url: { url: imageDataUrl } },
-          ],
-        }
-      : { role: "user", content: userPromptText };
+  const trimmedImageUrl = imageUrl?.trim();
+  const hasImage = typeof trimmedImageUrl === "string" && trimmedImageUrl.length > 0;
+
+  const userMessage: ChatCompletionMessageParam = hasImage
+    ? {
+        role: "user",
+        content: [
+          { type: "text", text: userPromptText },
+          { type: "image_url", image_url: { url: trimmedImageUrl! } },
+        ],
+      }
+    : { role: "user", content: userPromptText };
 
   try {
     const response = await openai.chat.completions.create({
