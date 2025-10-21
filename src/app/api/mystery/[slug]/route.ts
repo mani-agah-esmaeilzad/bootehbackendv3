@@ -2,6 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
+import { generateMysteryBubbleText } from '@/lib/ai';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +34,7 @@ export async function GET(
 
     const [imageRows]: any = await db.query(
       `
-        SELECT id, title, description, image_url, display_order
+        SELECT id, title, description, image_url, ai_notes, display_order
         FROM mystery_assessment_images
         WHERE mystery_assessment_id = ?
         ORDER BY display_order ASC, id ASC
@@ -41,11 +42,85 @@ export async function GET(
       [assessment.id]
     );
 
+    const requestUrl = new URL(request.url);
+    const assetBase =
+      process.env.NEXT_PUBLIC_ASSET_ORIGIN ||
+      process.env.APP_BASE_URL ||
+      `${requestUrl.protocol}//${requestUrl.host}`;
+
+    const resolveImageUrl = (value: string): string => {
+      if (!value) return value;
+      if (value.startsWith('http://') || value.startsWith('https://')) {
+        return value;
+      }
+      if (value.startsWith('/')) {
+        return `${assetBase}${value}`;
+      }
+      return `${assetBase}/${value}`;
+    };
+
+    const fallbackBubbleText = "به جزئیات نگاه کن؛ هر نشانه‌ای می‌تواند کلید حل راز باشد.";
+    const trimmedBubblePrompt =
+      typeof assessment.bubble_prompt === 'string' && assessment.bubble_prompt.trim().length > 0
+        ? assessment.bubble_prompt.trim()
+        : '';
+
+    const imagesWithDescription = await Promise.all(
+      imageRows.map(async (image: any, index: number) => {
+        const manualDescription =
+          typeof image.description === 'string' && image.description.trim().length > 0
+            ? image.description.trim()
+            : '';
+
+        const matchesBubblePrompt =
+          manualDescription.length > 0 &&
+          trimmedBubblePrompt.length > 0 &&
+          manualDescription === trimmedBubblePrompt;
+
+        const shouldGenerate = manualDescription.length === 0 || matchesBubblePrompt;
+
+        if (!shouldGenerate) {
+          const { ai_notes, ...rest } = image;
+          return {
+            ...rest,
+            description: manualDescription,
+          };
+        }
+
+        let generatedText: string | null = null;
+
+        try {
+          generatedText = await generateMysteryBubbleText({
+            title: image.title?.trim() || `تصویر ${index + 1}`,
+            aiNotes: image.ai_notes?.trim() || null,
+            assessmentName: assessment.name,
+            guideName: assessment.guide_name,
+            shortDescription: assessment.short_description,
+            bubblePrompt: trimmedBubblePrompt,
+            imageUrl: resolveImageUrl(image.image_url),
+          });
+        } catch (error) {
+          console.error('Mystery bubble generation error:', error);
+        }
+
+        const finalText =
+          typeof generatedText === 'string' && generatedText.trim().length > 0
+            ? generatedText.trim()
+            : fallbackBubbleText;
+
+        const { ai_notes, ...rest } = image;
+        return {
+          ...rest,
+          description: finalText,
+        };
+      })
+    );
+
     return NextResponse.json({
       success: true,
       data: {
         ...assessment,
-        images: imageRows,
+        images: imagesWithDescription,
       },
     });
   } catch (error) {
