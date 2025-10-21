@@ -59,7 +59,16 @@ export async function GET(
       return `${assetBase}/${value}`;
     };
 
-    const fallbackBubbleText = "به جزئیات نگاه کن؛ هر نشانه‌ای می‌تواند کلید حل راز باشد.";
+    const fallbackBubbleTexts = [
+      "سرنخ‌ها را پشت هم بچین؛ تصویر با تو حرف می‌زند.",
+      "پرونده زیر نور چراغ جان می‌گیرد؛ دنبال جرقه باش.",
+      "سایه‌ها را کنار بزن و آنچه پنهان شده را ببین.",
+      "هیچ جزئیاتی تصادفی نیست؛ با صبر همه چیز رو می‌شود.",
+      "هر خط دفترچه روایتی دارد؛ رمز آن را بخوان.",
+      "ردپای حقیقت همین‌جاست؛ کافی است دقیق نگاه کنی.",
+    ];
+    const randomFallback = () =>
+      fallbackBubbleTexts[Math.floor(Math.random() * fallbackBubbleTexts.length)] ?? fallbackBubbleTexts[0];
     const trimmedBubblePrompt =
       typeof assessment.bubble_prompt === 'string' && assessment.bubble_prompt.trim().length > 0
         ? assessment.bubble_prompt.trim()
@@ -106,7 +115,7 @@ export async function GET(
         const finalText =
           typeof generatedText === 'string' && generatedText.trim().length > 0
             ? generatedText.trim()
-            : fallbackBubbleText;
+            : randomFallback();
 
         const { ai_notes, ...rest } = image;
         return {

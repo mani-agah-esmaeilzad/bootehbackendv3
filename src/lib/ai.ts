@@ -184,6 +184,18 @@ type MysteryBubbleMessageInput = {
   imageUrl?: string | null;
 };
 
+const isVisionPayloadRejected = (error: any): boolean => {
+  if (!error) return false;
+  const errorCode = error?.code ?? error?.status ?? error?.error?.code;
+  const message: string | undefined =
+    error?.message ?? error?.error?.message ?? (typeof error === "string" ? error : undefined);
+  const lowered = message?.toLowerCase() ?? "";
+  return (
+    (errorCode === "invalid_request" || errorCode === 400 || lowered.includes("invalid_request")) &&
+    (lowered.includes("image") || lowered.includes("vision") || lowered.includes("content"))
+  );
+};
+
 export const generateMysteryBubbleText = async ({
   title,
   aiNotes,
@@ -224,22 +236,23 @@ export const generateMysteryBubbleText = async ({
   const trimmedImageUrl = imageUrl?.trim();
   const hasImage = typeof trimmedImageUrl === "string" && trimmedImageUrl.length > 0;
 
-  const userMessage: ChatCompletionMessageParam = hasImage
-    ? {
-        role: "user",
-        content: [
-          { type: "text", text: userPromptText },
-          { type: "image_url", image_url: { url: trimmedImageUrl! } },
-        ],
-      }
-    : { role: "user", content: userPromptText };
+  const buildUserMessage = (includeImage: boolean): ChatCompletionMessageParam =>
+    includeImage && hasImage
+      ? {
+          role: "user",
+          content: [
+            { type: "text", text: userPromptText },
+            { type: "image_url", image_url: { url: trimmedImageUrl! } },
+          ],
+        }
+      : { role: "user", content: userPromptText };
 
-  try {
+  const requestCompletion = async (includeImage: boolean): Promise<string> => {
     const response = await openai.chat.completions.create({
       model: DEFAULT_MODEL,
       messages: [
         { role: "system", content: systemPrompt },
-        userMessage,
+        buildUserMessage(includeImage),
       ],
       temperature: 0.6,
     });
@@ -248,6 +261,22 @@ export const generateMysteryBubbleText = async ({
     if (!raw) {
       throw new Error("متن مناسبی از سرویس هوش مصنوعی دریافت نشد.");
     }
+
+    return raw;
+  };
+
+  try {
+    const raw = await (async () => {
+      try {
+        return await requestCompletion(true);
+      } catch (error) {
+        if (hasImage && isVisionPayloadRejected(error)) {
+          console.warn("Vision payload rejected; retrying without image for bubble text generation.");
+          return await requestCompletion(false);
+        }
+        throw error;
+      }
+    })();
 
     return raw.replace(/^[\"“”]+|[\"“”]+$/g, "").trim();
   } catch (error) {
