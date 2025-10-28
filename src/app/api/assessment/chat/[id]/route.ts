@@ -62,7 +62,7 @@ export async function POST(
         const [assessmentRows]: any = await db.query(
             `SELECT 
                 q.persona_prompt, q.persona_name, q.secondary_persona_prompt,
-                q.secondary_persona_name, q.character_count, a.results, a.user_id 
+                q.secondary_persona_name, q.character_count, q.next_mystery_slug, a.results, a.user_id 
              FROM assessments a JOIN questionnaires q ON a.questionnaire_id = q.id
              WHERE a.questionnaire_id = ? AND a.session_id = ?`,
             [questionnaireId, sessionId]
@@ -74,13 +74,17 @@ export async function POST(
 
         const {
             persona_prompt, persona_name, secondary_persona_prompt,
-            secondary_persona_name, character_count, results: resultsString
+            secondary_persona_name, character_count, next_mystery_slug, results: resultsString
         } = assessmentRows[0];
 
         const results = resultsString ? JSON.parse(resultsString) : { history: [] };
         const history: ChatMessage[] = Array.isArray(results.history) ? results.history : [];
         const updatedHistory: ChatMessage[] = [...history];
         const historyForModel: ChatMessage[] = [...history];
+
+        const nextStage = next_mystery_slug
+            ? { type: 'mystery', slug: next_mystery_slug }
+            : null;
 
         if (isAutoStart) {
             historyForModel.push({
@@ -163,6 +167,7 @@ export async function POST(
                 personaName: finalPersonaName,
                 isComplete: isConversationComplete,
                 completionToken: matchedToken || null,
+                nextStage,
             }
         });
 

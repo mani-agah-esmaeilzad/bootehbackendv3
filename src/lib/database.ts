@@ -104,11 +104,17 @@ export async function createTables() {
         max_questions INT DEFAULT 8,
         display_order INT DEFAULT 0,
         category VARCHAR(100) NOT NULL DEFAULT 'مهارت‌های ارتباطی',
+        next_mystery_slug VARCHAR(255) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
       )
     `);
     console.log("  - جدول 'questionnaires' ایجاد شد.");
+
+    await connection.execute(`
+      ALTER TABLE questionnaires
+      ADD COLUMN IF NOT EXISTS next_mystery_slug VARCHAR(255) DEFAULT NULL AFTER category
+    `);
 
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS personality_assessments (

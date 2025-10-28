@@ -22,6 +22,12 @@ const createQuestionnaireSchema = z.object({
     has_timer: z.boolean().default(true),
     timer_duration: z.number().optional().nullable(),
     category: z.enum(QUESTIONNAIRE_CATEGORIES, { errorMap: () => ({ message: "دسته‌بندی انتخاب شده معتبر نیست" }) }),
+    next_mystery_slug: z
+        .string()
+        .trim()
+        .regex(/^[a-z0-9-]+$/i, { message: "اسلاگ رازآموزی باید فقط شامل حروف انگلیسی، اعداد و خط تیره باشد." })
+        .optional()
+        .nullable(),
 });
 
 // GET Handler - To fetch all questionnaires
@@ -40,7 +46,8 @@ export async function GET(request: Request) {
                 description,
                 display_order,
                 has_narrator,
-                category
+                category,
+                next_mystery_slug
              FROM questionnaires 
              ORDER BY display_order ASC, id ASC`
         );
@@ -78,7 +85,8 @@ export async function POST(request: Request) {
             has_narrator,
             has_timer,
             timer_duration,
-            category
+            category,
+            next_mystery_slug
         } = validation.data;
 
         const [orderResult]: any = await db.query("SELECT MAX(display_order) as max_order FROM questionnaires");
@@ -98,8 +106,9 @@ export async function POST(request: Request) {
                 has_timer,
                 timer_duration,
                 display_order,
-                category
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                category,
+                next_mystery_slug
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name,
                 description,
@@ -113,7 +122,8 @@ export async function POST(request: Request) {
                 has_timer,
                 timer_duration ?? null,
                 newOrder,
-                category
+                category,
+                next_mystery_slug?.trim() || null
             ]
         );
 

@@ -22,6 +22,12 @@ const questionnaireSchema = z.object({
     has_timer: z.boolean().default(true),
     timer_duration: z.number().optional().nullable(),
     category: z.enum(QUESTIONNAIRE_CATEGORIES, { errorMap: () => ({ message: "دسته‌بندی انتخاب شده معتبر نیست" }) }),
+    next_mystery_slug: z
+        .string()
+        .trim()
+        .regex(/^[a-z0-9-]+$/i, { message: "اسلاگ رازآموزی باید فقط شامل حروف انگلیسی، اعداد و خط تیره باشد." })
+        .optional()
+        .nullable(),
 });
 
 // GET Handler - To fetch a single questionnaire
@@ -51,6 +57,7 @@ export async function GET(
                 has_timer,
                 timer_duration,
                 category
+                ,next_mystery_slug
             FROM questionnaires WHERE id = ?`, 
             [params.id]
         );
@@ -127,7 +134,8 @@ export async function PUT(
             has_narrator,
             has_timer,
             timer_duration,
-            category
+            category,
+            next_mystery_slug
         } = validation.data;
         const { id } = params;
 
@@ -145,7 +153,8 @@ export async function PUT(
                 has_narrator = ?,
                 has_timer = ?,
                 timer_duration = ?,
-                category = ?
+                category = ?,
+                next_mystery_slug = ?
             WHERE id = ?`,
             [
                 name,
@@ -160,6 +169,7 @@ export async function PUT(
                 has_timer,
                 timer_duration ?? null,
                 category,
+                next_mystery_slug?.trim() || null,
                 id
             ]
         );

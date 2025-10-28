@@ -29,7 +29,8 @@ export async function POST(
         q.id, 
         q.name as title, 
         JSON_OBJECT('has_timer', q.has_timer, 'timer_duration', q.timer_duration) as settings, 
-        q.persona_name
+        q.persona_name,
+        q.next_mystery_slug
        FROM questionnaires q
        LEFT JOIN assessments a ON q.id = a.questionnaire_id AND a.user_id = ?
        WHERE q.id = ? AND (a.status IS NULL OR a.status = 'pending' OR a.status = 'current')`,
@@ -43,6 +44,9 @@ export async function POST(
     const assessment = assessmentRows[0];
     const sessionId = uuidv4();
     const initialMessage = getInitialAssessmentPrompt(assessment.title);
+    const nextStage = assessment.next_mystery_slug
+      ? { type: 'mystery', slug: assessment.next_mystery_slug }
+      : null;
 
     await db.query(
       `INSERT INTO assessments (user_id, questionnaire_id, status, session_id, results, updated_at)
@@ -66,6 +70,7 @@ export async function POST(
         initialMessage,
         settings: parsedSettings,
         personaName: assessment.persona_name,
+        nextStage,
       },
     });
 
