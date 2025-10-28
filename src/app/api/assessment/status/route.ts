@@ -74,16 +74,19 @@ export async function GET(req: Request) {
         const stages: any[] = [];
 
         questionnaires.forEach((questionnaire: any) => {
+            const categoryName = questionnaire.category || 'سایر دسته‌بندی‌ها';
+            const questionnaireStringId = `questionnaire:${questionnaire.id}`;
             stages.push({
                 type: 'questionnaire',
-                stringId: `questionnaire:${questionnaire.id}`,
+                stringId: questionnaireStringId,
                 questionnaireId: questionnaire.id,
                 title: questionnaire.title,
                 description: questionnaire.description,
-                category: questionnaire.category,
+                category: categoryName,
                 display_order: questionnaire.display_order,
                 rawStatus: questionnaire.status,
                 next_mystery_slug: questionnaire.next_mystery_slug ?? null,
+                accentColor: null,
             });
 
             if (questionnaire.next_mystery_slug) {
@@ -95,10 +98,11 @@ export async function GET(req: Request) {
                         mysterySlug: questionnaire.next_mystery_slug,
                         title: mystery.name,
                         description: mystery.short_description,
-                        category: 'رازآموزی',
+                        category: categoryName,
                         display_order: questionnaire.display_order + 0.01,
                         rawStatus: mysteryStatusMap.get(questionnaire.next_mystery_slug) || 'pending',
                         parentQuestionnaireId: questionnaire.id,
+                        accentColor: '#F59E0B',
                     });
                 }
             }
@@ -165,6 +169,7 @@ export async function GET(req: Request) {
             questionnaireId: stage.type === 'questionnaire' ? stage.questionnaireId : stage.parentQuestionnaireId,
             mysterySlug: stage.type === 'mystery' ? stage.mysterySlug : null,
             display_order: stage.display_order,
+            accentColor: stage.accentColor || null,
         }));
 
         return NextResponse.json({ success: true, data: responseData });
