@@ -65,7 +65,7 @@ export const generateResponse = async (
 
 export const generateSupplementaryQuestions = async (conversationJson: string, personaPrompt: string): Promise<{ q1: string, q2: string }> => {
     try {
-        const systemPrompt = `You are an expert HR interviewer. Your task is to generate two insightful follow-up questions in Persian based on the provided conversation history and the original persona prompt. The questions should probe deeper into areas where the user was vague, or challenge them on a key competency related to the persona. **Output ONLY a valid JSON object with two keys: "question1" and "question2". Do not add any other text.**`;
+        const systemPrompt = `You are an expert HR interviewer. Generate two sharp follow-up questions in Persian for a post-assessment experience called "Razamozi". Each question will be printed on its own illustrated card, so keep it self-contained, concrete, and no longer than 28 Persian words. Avoid phrases like "در پاسخ قبلی گفتی" and make sure the question stands on its own. **Return ONLY a valid JSON object with two keys: "question1" and "question2". Do not add any other text.**`;
         
         const userPrompt = `
             **Original Persona Prompt:**
