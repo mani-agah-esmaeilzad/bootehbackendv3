@@ -49,13 +49,15 @@ export async function GET(
     }
 
     const fileBuffer = await readFile(requestedPath);
-    const arrayBuffer = fileBuffer.buffer.slice(
-      fileBuffer.byteOffset,
-      fileBuffer.byteOffset + fileBuffer.byteLength,
-    );
     const contentType = getContentType(requestedPath);
 
-    const response = new NextResponse(arrayBuffer, {
+    const uint8Array = new Uint8Array(
+      fileBuffer.buffer as ArrayBuffer,
+      fileBuffer.byteOffset,
+      fileBuffer.byteLength,
+    );
+
+    const response = new NextResponse(uint8Array, {
       status: 200,
       headers: {
         'Content-Type': contentType,
