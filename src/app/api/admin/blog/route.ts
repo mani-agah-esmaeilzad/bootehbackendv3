@@ -7,6 +7,24 @@ import { getSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
+const isValidImageUrl = (value?: string | null) => {
+  if (!value) return true;
+  const trimmed = value.trim();
+  if (!trimmed) return true;
+  return (
+    /^https?:\/\//i.test(trimmed) ||
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('uploads/') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  );
+};
+
+const coverImageSchema = z
+  .string()
+  .trim()
+  .refine(isValidImageUrl, { message: 'آدرس تصویر معتبر نیست.' });
+
 const blogPostSchema = z.object({
   title: z.string().min(3, { message: 'عنوان باید حداقل ۳ کاراکتر باشد.' }),
   slug: z
@@ -19,15 +37,7 @@ const blogPostSchema = z.object({
     .max(400, { message: 'خلاصه حداکثر می‌تواند ۴۰۰ کاراکتر باشد.' })
     .optional(),
   content: z.string().min(100, { message: 'متن مقاله باید حداقل ۱۰۰ کاراکتر باشد.' }),
-  cover_image_url: z
-    .union([
-      z
-        .string()
-        .trim()
-        .url({ message: 'آدرس تصویر معتبر نیست.' }),
-      z.literal(''),
-    ])
-    .optional(),
+  cover_image_url: coverImageSchema.optional(),
   author: z
     .string()
     .min(2, { message: 'نام نویسنده باید حداقل ۲ کاراکتر باشد.' })
