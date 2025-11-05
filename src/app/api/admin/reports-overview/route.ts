@@ -1,4 +1,4 @@
-// src/app/api/admin/reports/overview/route.ts
+// src/app/api/admin/reports-overview/route.ts
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
@@ -61,9 +61,9 @@ export async function GET() {
         );
 
         const totals = {
-            totalCompleted: totalsRow?.total_completed ?? 0,
-            uniqueUsers: totalsRow?.unique_users ?? 0,
-            questionnaireCount: totalsRow?.questionnaire_count ?? 0,
+            totalCompleted: Number(totalsRow?.total_completed ?? 0),
+            uniqueUsers: Number(totalsRow?.unique_users ?? 0),
+            questionnaireCount: Number(totalsRow?.questionnaire_count ?? 0),
             lastCompletedAt: totalsRow?.last_completed_at ?? null,
         };
 
