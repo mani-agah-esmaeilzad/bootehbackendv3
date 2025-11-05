@@ -77,3 +77,63 @@ export async function GET(
         return NextResponse.json({ success: false, message: 'خطای داخلی سرور' }, { status: 500 });
     }
 }
+
+export async function DELETE(
+    request: Request,
+    { params }: { params: { id: string } }
+) {
+    try {
+        const session = await getSession();
+        if (!session.user || session.user.role !== 'admin') {
+            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+        }
+
+        const assessmentId = parseInt(params.id, 10);
+        if (Number.isNaN(assessmentId)) {
+            return NextResponse.json({ success: false, message: 'ID گزارش نامعتبر است' }, { status: 400 });
+        }
+
+        const [assessmentRows]: any = await db.query(
+            `SELECT session_id FROM assessments WHERE id = ?`,
+            [assessmentId]
+        );
+
+        if (!Array.isArray(assessmentRows) || assessmentRows.length === 0) {
+            return NextResponse.json({ success: false, message: 'گزارش یافت نشد' }, { status: 404 });
+        }
+
+        const sessionId: string | null = assessmentRows[0]?.session_id ?? null;
+
+        await db.query(`DELETE FROM assessments WHERE id = ?`, [assessmentId]);
+
+        if (sessionId) {
+            try {
+                await db.query(`DELETE FROM assessment_states WHERE session_id = ?`, [sessionId]);
+            } catch (error) {
+                console.warn(`Failed to delete assessment_states for session ${sessionId}:`, error);
+            }
+
+            try {
+                await db.query(`DELETE FROM chat_messages WHERE session_id = ?`, [sessionId]);
+            } catch (error) {
+                // اگر ستون session_id وجود نداشت، حذف بر اساس assessment_id را امتحان می‌کنیم
+                try {
+                    await db.query(`DELETE FROM chat_messages WHERE assessment_id = ?`, [assessmentId]);
+                } catch (innerError) {
+                    console.warn(`Failed to delete chat_messages for assessment ${assessmentId}:`, innerError);
+                }
+            }
+        } else {
+            try {
+                await db.query(`DELETE FROM chat_messages WHERE assessment_id = ?`, [assessmentId]);
+            } catch (error) {
+                console.warn(`Failed to delete chat_messages for assessment ${assessmentId}:`, error);
+            }
+        }
+
+        return NextResponse.json({ success: true, message: 'گزارش با موفقیت حذف شد.' });
+    } catch (error) {
+        console.error("Delete Report Error:", error);
+        return NextResponse.json({ success: false, message: 'خطای داخلی سرور' }, { status: 500 });
+    }
+}
