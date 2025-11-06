@@ -33,7 +33,7 @@ export async function POST(
         q.next_mystery_slug
        FROM questionnaires q
        LEFT JOIN assessments a ON q.id = a.questionnaire_id AND a.user_id = ?
-       WHERE q.id = ? AND (a.status IS NULL OR a.status = 'pending' OR a.status = 'current')`,
+       WHERE q.id = ? AND (a.status IS NULL OR a.status = 'pending' OR a.status = 'in-progress')`,
       [userId, questionnaireId]
     );
 
