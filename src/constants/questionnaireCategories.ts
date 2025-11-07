@@ -5,7 +5,7 @@ export const QUESTIONNAIRE_CATEGORIES = [
   'شایستگی های شناختی',
   'شایستگی های فردی',
   'شایستگی های رهبری و مدیریت',
-  'نیمرخ روانشناختی',
+  'شایستگی‌های روانشناختی',
 ] as const;
 
 export type QuestionnaireCategory = typeof QUESTIONNAIRE_CATEGORIES[number];
