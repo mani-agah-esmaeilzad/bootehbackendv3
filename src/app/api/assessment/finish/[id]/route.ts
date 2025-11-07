@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
 import { analyzeConversation } from '@/lib/ai';
+import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,11 +38,15 @@ export async function POST(
         }
 
         const { id: assessmentId, results: resultsString, analysis_prompt } = rows[0];
+        const userTokens = await fetchUserPromptTokens(userId);
         const results = resultsString ? JSON.parse(resultsString) : {};
         const conversationJson = JSON.stringify(results.history || []);
 
         // 1. دریافت رشته JSON تحلیل از AI
-        const analysisJsonString = await analyzeConversation(conversationJson, analysis_prompt);
+        const personalizedAnalysisPrompt = analysis_prompt
+            ? applyUserPromptPlaceholders(analysis_prompt, userTokens)
+            : analysis_prompt;
+        const analysisJsonString = await analyzeConversation(conversationJson, personalizedAnalysisPrompt || analysis_prompt || '');
         
         // *** FINAL FIX APPLIED HERE: Parse the analysis string into a real object ***
         let finalAnalysisObject = {};

@@ -5,6 +5,7 @@ import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { getInitialAssessmentPrompt } from '@/lib/ai';
+import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +29,7 @@ export async function POST(
       `SELECT 
         q.id, 
         q.name as title, 
+        q.initial_prompt,
         JSON_OBJECT('has_timer', q.has_timer, 'timer_duration', q.timer_duration) as settings, 
         q.persona_name,
         q.next_mystery_slug
@@ -42,8 +44,10 @@ export async function POST(
     }
 
     const assessment = assessmentRows[0];
+    const userTokens = await fetchUserPromptTokens(userId);
     const sessionId = uuidv4();
-    const initialMessage = getInitialAssessmentPrompt(assessment.title);
+    const initialTemplate = assessment.initial_prompt || getInitialAssessmentPrompt(assessment.title);
+    const initialMessage = applyUserPromptPlaceholders(initialTemplate, userTokens);
     const nextStage = assessment.next_mystery_slug
       ? { type: 'mystery', slug: assessment.next_mystery_slug }
       : null;

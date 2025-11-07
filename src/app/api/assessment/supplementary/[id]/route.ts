@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
 import { generateSupplementaryQuestions } from '@/lib/ai';
+import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,9 +43,13 @@ export async function POST(
         const { results: resultsString, persona_prompt } = rows[0];
         const results = resultsString ? JSON.parse(resultsString) : {};
         const conversationJson = JSON.stringify(results.history || []);
+        const userTokens = await fetchUserPromptTokens(userId);
+        const personalizedPersonaPrompt = persona_prompt
+            ? applyUserPromptPlaceholders(persona_prompt, userTokens)
+            : persona_prompt;
 
         // تولید سوالات تکمیلی توسط AI
-        const questions = await generateSupplementaryQuestions(conversationJson, persona_prompt);
+        const questions = await generateSupplementaryQuestions(conversationJson, personalizedPersonaPrompt || persona_prompt || "");
 
         // بک‌اند باید دقیقا همان کلیدهایی را برگرداند که فرانت‌اند انتظار دارد
         return NextResponse.json({

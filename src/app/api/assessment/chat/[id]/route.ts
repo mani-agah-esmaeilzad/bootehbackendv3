@@ -5,6 +5,7 @@ import db from '@/lib/database';
 import { getSession, authenticateToken } from '@/lib/auth';
 import { generateResponse } from '@/lib/ai';
 import type { ChatMessage } from '@/lib/ai';
+import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +78,14 @@ export async function POST(
             secondary_persona_name, character_count, next_mystery_slug, results: resultsString
         } = assessmentRows[0];
 
+        const userTokens = await fetchUserPromptTokens(session.user.userId);
+        const primaryPersonaPrompt = persona_prompt
+            ? applyUserPromptPlaceholders(persona_prompt, userTokens)
+            : persona_prompt;
+        const secondaryPersona = secondary_persona_prompt
+            ? applyUserPromptPlaceholders(secondary_persona_prompt, userTokens)
+            : secondary_persona_prompt;
+
         const results = resultsString ? JSON.parse(resultsString) : { history: [] };
         const history: ChatMessage[] = Array.isArray(results.history) ? results.history : [];
         const updatedHistory: ChatMessage[] = [...history];
@@ -104,9 +113,9 @@ export async function POST(
         let needsIntervention = false;
 
         // مرحله ۱: آیا شخصیت دوم (مبصر) فعال است؟
-        if (!isAutoStart && character_count === 2 && secondary_persona_prompt) {
+        if (!isAutoStart && character_count === 2 && secondaryPersona) {
             // مرحله ۲: از مبصر بخواه که پاسخ را به 'VALID' یا 'INVALID' طبقه‌بندی کند
-            const classificationResponse = await generateResponse(secondary_persona_prompt, updatedHistory);
+            const classificationResponse = await generateResponse(secondaryPersona, updatedHistory);
 
             console.log("--- SUPERVISOR CLASSIFICATION --- :", classificationResponse?.trim().toUpperCase());
 
@@ -124,11 +133,11 @@ export async function POST(
             rawAiResponse = await generateResponse(interventionPrompt, updatedHistory);
             finalPersonaName = secondary_persona_name || persona_name; // نام مبصر را نمایش بده
         } else if (isAutoStart) {
-            rawAiResponse = await generateResponse(persona_prompt, historyForModel);
+            rawAiResponse = await generateResponse(primaryPersonaPrompt || persona_prompt, historyForModel);
             finalPersonaName = persona_name;
         } else {
             // اگر پاسخ معتبر بود، از مشاور اصلی پاسخ عادی را بگیر
-            rawAiResponse = await generateResponse(persona_prompt, historyForModel);
+            rawAiResponse = await generateResponse(primaryPersonaPrompt || persona_prompt, historyForModel);
             finalPersonaName = persona_name;
         }
 

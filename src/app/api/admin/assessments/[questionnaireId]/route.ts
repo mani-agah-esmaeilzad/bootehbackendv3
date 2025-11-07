@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { extractTokenFromHeader, authenticateToken } from '@/lib/auth';
 import { getConnectionWithRetry } from '@/lib/database';
 import { v4 as uuidv4 } from 'uuid'; // <--- وارد کردن کتابخانه uuid
+import { buildUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 
 export async function POST(
   request: NextRequest,
@@ -35,7 +36,7 @@ export async function POST(
 
     try {
       // دریافت اطلاعات کاربر و پرسشنامه از دیتابیس
-      const [users] = await connection.execute('SELECT first_name, last_name FROM users WHERE id = ?', [userId]);
+      const [users] = await connection.execute('SELECT username, first_name, last_name, work_experience, age FROM users WHERE id = ?', [userId]);
       const [questionnaires] = await connection.execute('SELECT initial_prompt FROM questionnaires WHERE id = ?', [questionnaireId]);
 
       const userData = Array.isArray(users) && users.length > 0 ? users[0] as any : null;
@@ -49,13 +50,13 @@ export async function POST(
         return NextResponse.json({ success: false, message: 'پرسشنامه یافت نشد' }, { status: 404 });
       }
 
-      const userName = `${userData.first_name} ${userData.last_name}`.trim();
+      const userTokens = buildUserPromptTokens(userData);
 
       // 1. ایجاد شناسه جلسه جدید با uuid
       const sessionId = uuidv4();
 
       // 2. جایگزین کردن نام کاربر در پرامپت اولیه
-      const finalOpening = questionnaireData.initial_prompt.replace('{user_name}', userName);
+      const finalOpening = applyUserPromptPlaceholders(questionnaireData.initial_prompt, userTokens);
 
       // 3. ایجاد رکورد ارزیابی جدید
       const [result] = await connection.execute(

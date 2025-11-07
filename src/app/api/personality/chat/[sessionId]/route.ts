@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
 import { generateResponse, ChatMessage } from '@/lib/ai';
+import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,7 +61,12 @@ export async function POST(
     const history: ChatMessage[] = results.history || [];
     history.push({ role: 'user', content: message });
 
-    const aiReply = await generateResponse(record.persona_prompt, history, record.model || undefined);
+    const userTokens = await fetchUserPromptTokens(session.user.userId);
+    const personaPrompt = record.persona_prompt
+      ? applyUserPromptPlaceholders(record.persona_prompt, userTokens)
+      : record.persona_prompt;
+
+    const aiReply = await generateResponse(personaPrompt || record.persona_prompt, history, record.model || undefined);
     if (!aiReply) {
       return NextResponse.json({ success: false, message: 'پاسخ سیستم هوشمند در حال حاضر در دسترس نیست.' }, { status: 500 });
     }

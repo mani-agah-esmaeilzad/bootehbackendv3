@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
 import { analyzeConversation } from '@/lib/ai';
+import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +53,11 @@ export async function POST(
     }
 
     const conversationJson = JSON.stringify(history);
-    const analysisString = await analyzeConversation(conversationJson, record.analysis_prompt);
+    const userTokens = await fetchUserPromptTokens(session.user.userId);
+    const analysisPrompt = record.analysis_prompt
+      ? applyUserPromptPlaceholders(record.analysis_prompt, userTokens)
+      : record.analysis_prompt;
+    const analysisString = await analyzeConversation(conversationJson, analysisPrompt || record.analysis_prompt || '');
 
     let analysisObject: any = {};
     try {

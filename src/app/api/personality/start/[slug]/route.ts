@@ -5,6 +5,7 @@ import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { getInitialAssessmentPrompt, ChatMessage } from '@/lib/ai';
+import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,7 @@ export async function POST(
 
     const assessment = assessmentRows[0];
     const userId = session.user.userId;
+    const userTokens = await fetchUserPromptTokens(userId);
 
     const [existingSessions]: any = await db.query(
       `SELECT session_uuid, results, status, created_at
@@ -47,7 +49,8 @@ export async function POST(
 
     let sessionUuid: string;
     let history: ChatMessage[] = [];
-    const openingMessage = assessment.initial_prompt || getInitialAssessmentPrompt(assessment.name);
+    const openingTemplate = assessment.initial_prompt || getInitialAssessmentPrompt(assessment.name);
+    const openingMessage = applyUserPromptPlaceholders(openingTemplate, userTokens);
 
     if (Array.isArray(existingSessions) && existingSessions.length > 0) {
       sessionUuid = existingSessions[0].session_uuid;
