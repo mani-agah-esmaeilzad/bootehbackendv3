@@ -58,12 +58,12 @@ export async function POST(
       }, { status: 400 });
     }
 
-    const answerMap = answers.reduce<Record<number, number>>((map, entry) => {
+    const answerMap = answers.reduce((map: Record<number, number>, entry: any) => {
       if (entry && typeof entry.questionId === 'number' && typeof entry.value === 'number') {
         map[entry.questionId] = entry.value;
       }
       return map;
-    }, {});
+    }, {} as Record<number, number>);
 
     if (Object.keys(answerMap).length !== questionSet.length) {
       return NextResponse.json({ success: false, message: 'پاسخ برخی سؤالات ارسال نشده است.' }, { status: 400 });
