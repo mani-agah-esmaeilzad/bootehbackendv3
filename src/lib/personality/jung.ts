@@ -1,6 +1,6 @@
 // src/lib/personality/jung.ts
 
-import { JUNG_QUESTIONS, JungQuestion } from "@/constants/jungQuestions";
+import { JUNG_QUESTIONS, JUNG_QUESTION_COUNT, JungQuestion } from "@/constants/jungQuestions";
 
 type AnswerMap = Record<number, number>;
 
@@ -23,6 +23,7 @@ const LETTER_LABELS: Record<string, string> = {
 };
 
 export const getJungQuestionSet = () => JUNG_QUESTIONS;
+export { JUNG_QUESTION_COUNT };
 
 export const scoreJungAnswers = (answers: AnswerMap) => {
   const letterTotals: Record<string, { sum: number; count: number }> = {
