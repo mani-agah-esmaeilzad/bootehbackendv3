@@ -68,8 +68,8 @@ export async function POST(
         questionCount: questions.length,
         scale: {
           min: 1,
-          max: 5,
-          labels: ['کاملاً مخالفم', 'مخالفم', 'خنثی', 'موافقم', 'کاملاً موافقم'],
+          max: 2,
+          labels: ['گزینه الف', 'گزینه ب'],
         },
         questions: questions.map((question) => ({
           id: question.id,

@@ -59,14 +59,27 @@ export async function POST(
     }
 
     const answerMap = answers.reduce((map: Record<number, number>, entry: any) => {
-      if (entry && typeof entry.questionId === 'number' && typeof entry.value === 'number') {
+      if (
+        entry &&
+        typeof entry.questionId === 'number' &&
+        typeof entry.value === 'number'
+      ) {
         map[entry.questionId] = entry.value;
       }
       return map;
-    }, {} as Record<number, number>);
+    }, {});
 
     if (Object.keys(answerMap).length !== questionSet.length) {
       return NextResponse.json({ success: false, message: 'پاسخ برخی سؤالات ارسال نشده است.' }, { status: 400 });
+    }
+
+    const hasInvalidAnswer = questionSet.some((question) => {
+      const value = answerMap[question.id];
+      return value !== 1 && value !== 2;
+    });
+
+    if (hasInvalidAnswer) {
+      return NextResponse.json({ success: false, message: 'برای هر سؤال فقط گزینه‌ الف یا ب معتبر است.' }, { status: 400 });
     }
 
     const analysis = scoreJungAnswers(answerMap);

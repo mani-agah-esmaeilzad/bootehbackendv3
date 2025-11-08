@@ -1,17 +1,10 @@
 // src/lib/personality/jung.ts
 
-import { JUNG_QUESTIONS, JUNG_QUESTION_COUNT, JungQuestion } from "@/constants/jungQuestions";
+import { JUNG_QUESTIONS, JUNG_QUESTION_COUNT, JungQuestion, MbtiLetter } from "@/constants/jungQuestions";
 
 type AnswerMap = Record<number, number>;
 
-const LETTER_PAIRS: Record<JungQuestion["dimension"], { primary: "E" | "S" | "T" | "J"; secondary: "I" | "N" | "F" | "P" }> = {
-  EI: { primary: "E", secondary: "I" },
-  SN: { primary: "S", secondary: "N" },
-  TF: { primary: "T", secondary: "F" },
-  JP: { primary: "J", secondary: "P" },
-};
-
-const LETTER_LABELS: Record<string, string> = {
+const LETTER_LABELS: Record<MbtiLetter, string> = {
   E: "برونگرایی (E)",
   I: "درونگرایی (I)",
   S: "واقع‌گرایی (S)",
@@ -22,58 +15,85 @@ const LETTER_LABELS: Record<string, string> = {
   P: "انعطاف‌پذیری (P)",
 };
 
+const AXIS_CONFIG: Array<{ dimension: JungQuestion["dimension"]; letters: [MbtiLetter, MbtiLetter] }> = [
+  { dimension: "EI", letters: ["I", "E"] },
+  { dimension: "SN", letters: ["S", "N"] },
+  { dimension: "TF", letters: ["T", "F"] },
+  { dimension: "JP", letters: ["J", "P"] },
+];
+
+const LETTER_MAXIMA: Record<MbtiLetter, number> = {
+  E: 0,
+  I: 0,
+  S: 0,
+  N: 0,
+  T: 0,
+  F: 0,
+  J: 0,
+  P: 0,
+};
+
+JUNG_QUESTIONS.forEach((question) => {
+  LETTER_MAXIMA[question.optionA.letter] += question.optionA.score;
+  LETTER_MAXIMA[question.optionB.letter] += question.optionB.score;
+});
+
 export const getJungQuestionSet = () => JUNG_QUESTIONS;
 export { JUNG_QUESTION_COUNT };
 
+const normalizeScore = (letter: MbtiLetter, total: number) => {
+  const max = LETTER_MAXIMA[letter] || 1;
+  return Number(((total / max) * 100).toFixed(2));
+};
+
+const buildSummary = (mbti: string) =>
+  `تیپ شخصیتی شما بر اساس پاسخ‌های استاندارد آزمون ۸۷ سؤالی MBTI برابر با ${mbti} برآورد شده است. اختلاف امتیاز در هر بعد میزان وضوح ترجیحات شما را نشان می‌دهد.`;
+
 export const scoreJungAnswers = (answers: AnswerMap) => {
-  const letterTotals: Record<string, { sum: number; count: number }> = {
-    E: { sum: 0, count: 0 },
-    I: { sum: 0, count: 0 },
-    S: { sum: 0, count: 0 },
-    N: { sum: 0, count: 0 },
-    T: { sum: 0, count: 0 },
-    F: { sum: 0, count: 0 },
-    J: { sum: 0, count: 0 },
-    P: { sum: 0, count: 0 },
+  const letterTotals: Record<MbtiLetter, number> = {
+    E: 0,
+    I: 0,
+    S: 0,
+    N: 0,
+    T: 0,
+    F: 0,
+    J: 0,
+    P: 0,
   };
 
   JUNG_QUESTIONS.forEach((question) => {
     const value = answers[question.id];
-    if (!value || value < 1 || value > 5) return;
-    letterTotals[question.letter].sum += value;
-    letterTotals[question.letter].count += 1;
+    if (value === 1) {
+      letterTotals[question.optionA.letter] += question.optionA.score;
+    } else if (value === 2) {
+      letterTotals[question.optionB.letter] += question.optionB.score;
+    }
   });
 
-  const normalize = (letter: string) => {
-    const { sum, count } = letterTotals[letter];
-    if (count === 0) return 0;
-    return Number(((sum - count) / (count * 4) * 100).toFixed(2)); // converts 1-5 scale to 0-100
-  };
-
-  const axes = Object.entries(LETTER_PAIRS).map(([dimension, pair]) => {
-    const primaryScore = normalize(pair.primary);
-    const secondaryScore = normalize(pair.secondary);
-    const letter =
-      primaryScore >= secondaryScore ? pair.primary : pair.secondary;
-    const dominantScore = Math.max(primaryScore, secondaryScore);
-    const secondary = Math.min(primaryScore, secondaryScore);
+  const axes = AXIS_CONFIG.map(({ dimension, letters }) => {
+    const [first, second] = letters;
+    const firstRaw = letterTotals[first];
+    const secondRaw = letterTotals[second];
+    const firstScore = normalizeScore(first, firstRaw);
+    const secondScore = normalizeScore(second, secondRaw);
+    const dominantLetter = firstScore >= secondScore ? first : second;
 
     return {
       dimension,
       primary: {
-        letter: pair.primary,
-        label: LETTER_LABELS[pair.primary],
-        score: primaryScore,
+        letter: first,
+        label: LETTER_LABELS[first],
+        score: firstScore,
       },
       secondary: {
-        letter: pair.secondary,
-        label: LETTER_LABELS[pair.secondary],
-        score: secondaryScore,
+        letter: second,
+        label: LETTER_LABELS[second],
+        score: secondScore,
       },
-      dominantLetter: letter,
-      dominantScore,
-      secondaryScore: secondary,
-      delta: Number((Math.abs(primaryScore - secondaryScore)).toFixed(2)),
+      dominantLetter,
+      dominantScore: Math.max(firstScore, secondScore),
+      secondaryScore: Math.min(firstScore, secondScore),
+      delta: Number(Math.abs(firstScore - secondScore).toFixed(2)),
     };
   });
 
@@ -96,6 +116,6 @@ export const scoreJungAnswers = (answers: AnswerMap) => {
     mbti,
     axes,
     radar,
-    summary: `تیپ شخصیتی شما بر اساس پاسخ‌ها ${mbti} برآورد شده است. این نتیجه بر مبنای نسخه‌ی ۶۴ سؤالی آزمون تایپولوژی یونگ محاسبه شده و توازن هر بعد را در نمودار نشان می‌دهد.`,
+    summary: buildSummary(mbti),
   };
 };
