@@ -22,29 +22,8 @@ const AXIS_CONFIG: Array<{ dimension: JungQuestion["dimension"]; letters: [MbtiL
   { dimension: "JP", letters: ["J", "P"] },
 ];
 
-const LETTER_MAXIMA: Record<MbtiLetter, number> = {
-  E: 0,
-  I: 0,
-  S: 0,
-  N: 0,
-  T: 0,
-  F: 0,
-  J: 0,
-  P: 0,
-};
-
-JUNG_QUESTIONS.forEach((question) => {
-  LETTER_MAXIMA[question.optionA.letter] += question.optionA.score;
-  LETTER_MAXIMA[question.optionB.letter] += question.optionB.score;
-});
-
 export const getJungQuestionSet = () => JUNG_QUESTIONS;
 export { JUNG_QUESTION_COUNT };
-
-const normalizeScore = (letter: MbtiLetter, total: number) => {
-  const max = LETTER_MAXIMA[letter] || 1;
-  return Number(((total / max) * 100).toFixed(2));
-};
 
 const buildSummary = (mbti: string) =>
   `تیپ شخصیتی شما بر اساس پاسخ‌های استاندارد آزمون ۸۷ سؤالی MBTI برابر با ${mbti} برآورد شده است. اختلاف امتیاز در هر بعد میزان وضوح ترجیحات شما را نشان می‌دهد.`;
@@ -74,8 +53,9 @@ export const scoreJungAnswers = (answers: AnswerMap) => {
     const [first, second] = letters;
     const firstRaw = letterTotals[first];
     const secondRaw = letterTotals[second];
-    const firstScore = normalizeScore(first, firstRaw);
-    const secondScore = normalizeScore(second, secondRaw);
+    const axisTotal = firstRaw + secondRaw;
+    const firstScore = axisTotal === 0 ? 50 : Number(((firstRaw / axisTotal) * 100).toFixed(2));
+    const secondScore = Number((100 - firstScore).toFixed(2));
     const dominantLetter = firstScore >= secondScore ? first : second;
 
     return {
