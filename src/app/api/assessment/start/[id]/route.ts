@@ -39,7 +39,13 @@ export async function POST(
         q.phase_two_welcome_message,
         q.total_phases,
         q.next_mystery_slug,
-        JSON_OBJECT('has_timer', q.has_timer, 'timer_duration', q.timer_duration) as settings
+        JSON_OBJECT('has_timer', q.has_timer, 'timer_duration', q.timer_duration) as settings,
+        a.id as assessment_id,
+        a.session_id as assessment_session_id,
+        a.status as assessment_status,
+        a.results as assessment_results,
+        a.current_phase as assessment_current_phase,
+        a.phase_total as assessment_phase_total
        FROM questionnaires q
        LEFT JOIN assessments a ON q.id = a.questionnaire_id AND a.user_id = ?
        WHERE q.id = ? AND (a.status IS NULL OR a.status = 'pending' OR a.status = 'in-progress')`,
@@ -51,23 +57,61 @@ export async function POST(
     }
 
     const assessment = assessmentRows[0];
-    const phaseTotal = Math.max(getPhaseCount(assessment), 1);
+    const derivedPhaseTotal = Math.max(getPhaseCount(assessment), 1);
+    const storedPhaseTotal = assessment.assessment_phase_total || derivedPhaseTotal;
+    const phaseTotal = Math.max(storedPhaseTotal, derivedPhaseTotal);
     const userTokens = await fetchUserPromptTokens(userId);
-    const sessionId = uuidv4();
-    const initialTemplate = getPhaseWelcomeMessage(assessment, 1) || assessment.initial_prompt || getInitialAssessmentPrompt(assessment.title);
+    const existingAssessmentId = assessment.assessment_id;
+    const existingStatus = assessment.assessment_status;
+    const existingSessionId = assessment.assessment_session_id;
+    let sessionId = existingSessionId || uuidv4();
+    let currentPhase = assessment.assessment_current_phase || 1;
+    let results = ensurePhaseResults(assessment.assessment_results || null, phaseTotal);
+    results.currentPhase = currentPhase;
+
+    const canResume =
+      Boolean(existingAssessmentId) &&
+      existingStatus === 'in-progress' &&
+      Boolean(existingSessionId);
+
+    if (!canResume) {
+      sessionId = uuidv4();
+      currentPhase = 1;
+      results = ensurePhaseResults(null, phaseTotal);
+      results.currentPhase = currentPhase;
+      const serializedResults = JSON.stringify(results);
+      await db.query(
+        `INSERT INTO assessments (user_id, questionnaire_id, status, session_id, results, updated_at, current_phase, phase_total)
+         VALUES (?, ?, 'in-progress', ?, ?, NOW(), ?, ?)
+         ON DUPLICATE KEY UPDATE 
+           status = 'in-progress',
+           session_id = VALUES(session_id),
+           results = VALUES(results),
+           current_phase = VALUES(current_phase),
+           phase_total = VALUES(phase_total),
+           updated_at = NOW()`,
+        [userId, questionnaireId, sessionId, serializedResults, currentPhase, phaseTotal]
+      );
+    } else {
+      currentPhase = assessment.assessment_current_phase || results.currentPhase || 1;
+      results.currentPhase = currentPhase;
+      const serializedResults = JSON.stringify(results);
+      await db.query(
+        `UPDATE assessments 
+           SET results = ?, phase_total = ?, current_phase = ?, updated_at = NOW()
+         WHERE id = ?`,
+        [serializedResults, phaseTotal, currentPhase, existingAssessmentId]
+      );
+    }
+
+    const initialTemplate =
+      getPhaseWelcomeMessage(assessment, currentPhase) ||
+      assessment.initial_prompt ||
+      getInitialAssessmentPrompt(assessment.title);
     const initialMessage = applyUserPromptPlaceholders(initialTemplate, userTokens);
     const nextStage = assessment.next_mystery_slug
       ? { type: 'mystery', slug: assessment.next_mystery_slug }
       : null;
-
-    const initialResults = ensurePhaseResults(null, phaseTotal);
-
-    await db.query(
-      `INSERT INTO assessments (user_id, questionnaire_id, status, session_id, results, updated_at, current_phase, phase_total)
-       VALUES (?, ?, 'in-progress', ?, ?, NOW(), 1, ?)
-       ON DUPLICATE KEY UPDATE status = 'in-progress', session_id = VALUES(session_id), results = VALUES(results), current_phase = VALUES(current_phase), phase_total = VALUES(phase_total), updated_at = NOW()`,
-      [userId, questionnaireId, sessionId, JSON.stringify(initialResults), phaseTotal]
-    );
     
     // Improved safety for JSON parsing
     let parsedSettings = {};
@@ -83,9 +127,9 @@ export async function POST(
         sessionId,
         initialMessage,
         settings: parsedSettings,
-        personaName: getPhasePersonaName(assessment, 1),
+        personaName: getPhasePersonaName(assessment, currentPhase),
         nextStage,
-        currentPhase: 1,
+        currentPhase,
         totalPhases: phaseTotal,
       },
     });
