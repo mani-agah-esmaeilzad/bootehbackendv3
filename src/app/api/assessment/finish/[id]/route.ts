@@ -3,8 +3,10 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
-import { analyzeConversation } from '@/lib/ai';
+import { analyzeConversation, getInitialAssessmentPrompt } from '@/lib/ai';
 import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
+import { ensurePhaseResults, flattenPhaseHistory, getPhaseAnalysisPrompt, getPhaseCount, getPhasePersonaName, getPhaseWelcomeMessage } from '@/lib/questionnairePhase';
+import { v4 as uuidv4 } from 'uuid';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +28,11 @@ export async function POST(
         }
 
         const [rows]: any = await db.query(
-            `SELECT a.id, a.results, q.analysis_prompt 
+            `SELECT a.id, a.results, a.current_phase, a.phase_total,
+                    q.analysis_prompt, q.persona_name, q.persona_prompt,
+                    q.phase_two_persona_name, q.phase_two_persona_prompt,
+                    q.phase_two_analysis_prompt, q.phase_two_welcome_message,
+                    q.welcome_message, q.name as questionnaire_title
              FROM assessments a
              JOIN questionnaires q ON a.questionnaire_id = q.id
              WHERE a.user_id = ? AND a.questionnaire_id = ? AND a.session_id = ?`,
@@ -37,16 +43,54 @@ export async function POST(
             return NextResponse.json({ success: false, message: 'جلسه ارزیابی یافت نشد' }, { status: 404 });
         }
 
-        const { id: assessmentId, results: resultsString, analysis_prompt } = rows[0];
+        const questionnaireRow = rows[0];
+        const { id: assessmentId, results: resultsString, analysis_prompt, current_phase, phase_total } = questionnaireRow;
         const userTokens = await fetchUserPromptTokens(userId);
-        const results = resultsString ? JSON.parse(resultsString) : {};
-        const conversationJson = JSON.stringify(results.history || []);
+        const totalPhases = phase_total || getPhaseCount(questionnaireRow);
+        const currentPhase = current_phase || 1;
+        const results = ensurePhaseResults(resultsString || null, totalPhases);
+        const phaseEntry = results.phases?.[currentPhase - 1];
+        if (phaseEntry) {
+            phaseEntry.supplementary_answers = supplementary_answers;
+            results.phases![currentPhase - 1] = phaseEntry;
+        }
+
+        if (currentPhase < totalPhases) {
+            const nextPhaseIndex = currentPhase + 1;
+            results.currentPhase = nextPhaseIndex;
+            const newSessionId = uuidv4();
+            const nextInitialTemplate = getPhaseWelcomeMessage(questionnaireRow, nextPhaseIndex)
+                || getInitialAssessmentPrompt(questionnaireRow.questionnaire_title || 'مرحله بعد');
+            const nextInitialMessage = applyUserPromptPlaceholders(nextInitialTemplate, userTokens);
+
+            await db.query(
+                `UPDATE assessments SET results = ?, current_phase = ?, session_id = ?, updated_at = NOW()
+                 WHERE id = ?`,
+                [JSON.stringify(results), nextPhaseIndex, newSessionId, assessmentId]
+            );
+
+            return NextResponse.json({
+                success: true,
+                data: {
+                    nextPhase: {
+                        index: nextPhaseIndex,
+                        total: totalPhases,
+                        sessionId: newSessionId,
+                        personaName: getPhasePersonaName(questionnaireRow, nextPhaseIndex) || questionnaireRow.persona_name,
+                        initialMessage: nextInitialMessage,
+                    },
+                },
+            });
+        }
+
+        const conversationJson = JSON.stringify(flattenPhaseHistory(results));
+        const finalAnalysisPromptRaw = getPhaseAnalysisPrompt(questionnaireRow, currentPhase) || analysis_prompt;
 
         // 1. دریافت رشته JSON تحلیل از AI
-        const personalizedAnalysisPrompt = analysis_prompt
-            ? applyUserPromptPlaceholders(analysis_prompt, userTokens)
-            : analysis_prompt;
-        const analysisJsonString = await analyzeConversation(conversationJson, personalizedAnalysisPrompt || analysis_prompt || '');
+        const personalizedAnalysisPrompt = finalAnalysisPromptRaw
+            ? applyUserPromptPlaceholders(finalAnalysisPromptRaw, userTokens)
+            : finalAnalysisPromptRaw;
+        const analysisJsonString = await analyzeConversation(conversationJson, personalizedAnalysisPrompt || finalAnalysisPromptRaw || '');
         
         // *** FINAL FIX APPLIED HERE: Parse the analysis string into a real object ***
         let finalAnalysisObject = {};
@@ -63,10 +107,16 @@ export async function POST(
         }
 
         // 2. ساخت آبجکت نهایی با داده‌های صحیح
+        const aggregatedSupplementary = Array.isArray(results.phases)
+            ? results.phases.reduce((acc, phase) => {
+                acc[`phase_${phase.phase}`] = phase.supplementary_answers || {};
+                return acc;
+            }, {} as Record<string, any>)
+            : { phase_1: supplementary_answers };
+
         const updatedResults = { 
             ...results, 
-            supplementary_answers: supplementary_answers,
-            // حالا آبجکت parse شده را ذخیره می‌کنیم، نه رشته اولیه را
+            supplementary_answers: aggregatedSupplementary,
             final_analysis: finalAnalysisObject 
         };
 
@@ -80,7 +130,7 @@ export async function POST(
             success: true,
             message: 'ارزیابی با موفقیت به پایان رسید و تحلیل شد.',
             data: { 
-                analysis: finalAnalysisObject, // آبجکت تحلیل را برمی‌گردانیم
+                analysis: finalAnalysisObject,
                 assessmentId: assessmentId
             }
         });

@@ -5,6 +5,7 @@ import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
 import { generateSupplementaryQuestions } from '@/lib/ai';
 import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
+import { ensurePhaseResults, getPhasePersonaPrompt } from '@/lib/questionnairePhase';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export async function POST(
 
         // واکشی تاریخچه مکالمه و پرامپت شخصیت از دیتابیس
         const [rows]: any = await db.query(
-            `SELECT a.results, q.persona_prompt
+            `SELECT a.results, a.current_phase, a.phase_total, q.persona_prompt, q.phase_two_persona_prompt
              FROM assessments a
              JOIN questionnaires q ON a.questionnaire_id = q.id
              WHERE a.user_id = ? AND a.questionnaire_id = ? AND a.session_id = ?`,
@@ -40,13 +41,17 @@ export async function POST(
             return NextResponse.json({ success: false, message: 'جلسه ارزیابی یافت نشد' }, { status: 404 });
         }
 
-        const { results: resultsString, persona_prompt } = rows[0];
-        const results = resultsString ? JSON.parse(resultsString) : {};
-        const conversationJson = JSON.stringify(results.history || []);
+        const { results: resultsString, persona_prompt, phase_two_persona_prompt, current_phase, phase_total } = rows[0];
+        const phaseTotal = phase_total || 1;
+        const currentPhase = current_phase || 1;
+        const results = ensurePhaseResults(resultsString || null, phaseTotal);
+        const phaseEntry = results.phases?.[currentPhase - 1] ?? { history: [] };
+        const conversationJson = JSON.stringify(phaseEntry.history || []);
         const userTokens = await fetchUserPromptTokens(userId);
-        const personalizedPersonaPrompt = persona_prompt
-            ? applyUserPromptPlaceholders(persona_prompt, userTokens)
-            : persona_prompt;
+        const personaPromptRaw = getPhasePersonaPrompt(rows[0], currentPhase) || persona_prompt || '';
+        const personalizedPersonaPrompt = personaPromptRaw
+            ? applyUserPromptPlaceholders(personaPromptRaw, userTokens)
+            : personaPromptRaw;
 
         // تولید سوالات تکمیلی توسط AI
         const questions = await generateSupplementaryQuestions(conversationJson, personalizedPersonaPrompt || persona_prompt || "");

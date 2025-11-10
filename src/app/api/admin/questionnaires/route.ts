@@ -28,6 +28,23 @@ const createQuestionnaireSchema = z.object({
         .regex(/^[a-z0-9-]+$/i, { message: "اسلاگ رازآموزی باید فقط شامل حروف انگلیسی، اعداد و خط تیره باشد." })
         .optional()
         .nullable(),
+    enable_second_phase: z.boolean().default(false),
+    phase_two_persona_name: z.string().optional().nullable(),
+    phase_two_persona_prompt: z.string().optional().nullable(),
+    phase_two_analysis_prompt: z.string().optional().nullable(),
+    phase_two_welcome_message: z.string().optional().nullable(),
+}).superRefine((data, ctx) => {
+    if (data.enable_second_phase) {
+        if (!data.phase_two_persona_name || data.phase_two_persona_name.trim().length < 2) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phase_two_persona_name'], message: 'نام شخصیت مرحله دوم الزامی است.' });
+        }
+        if (!data.phase_two_persona_prompt || data.phase_two_persona_prompt.trim().length < 20) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phase_two_persona_prompt'], message: 'پرامپت مرحله دوم باید حداقل ۲۰ کاراکتر باشد.' });
+        }
+        if (!data.phase_two_analysis_prompt || data.phase_two_analysis_prompt.trim().length < 20) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phase_two_analysis_prompt'], message: 'پرامپت تحلیل مرحله دوم باید حداقل ۲۰ کاراکتر باشد.' });
+        }
+    }
 });
 
 // GET Handler - To fetch all questionnaires
@@ -86,11 +103,17 @@ export async function POST(request: Request) {
             has_timer,
             timer_duration,
             category,
-            next_mystery_slug
+            next_mystery_slug,
+            enable_second_phase,
+            phase_two_persona_name,
+            phase_two_persona_prompt,
+            phase_two_analysis_prompt,
+            phase_two_welcome_message
         } = validation.data;
 
         const [orderResult]: any = await db.query("SELECT MAX(display_order) as max_order FROM questionnaires");
         const newOrder = (orderResult[0].max_order || 0) + 1;
+        const totalPhases = enable_second_phase ? 2 : 1;
 
         const [result]: any = await db.query(
             `INSERT INTO questionnaires (
@@ -107,8 +130,13 @@ export async function POST(request: Request) {
                 timer_duration,
                 display_order,
                 category,
-                next_mystery_slug
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                next_mystery_slug,
+                total_phases,
+                phase_two_persona_name,
+                phase_two_persona_prompt,
+                phase_two_analysis_prompt,
+                phase_two_welcome_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name,
                 description,
@@ -123,7 +151,12 @@ export async function POST(request: Request) {
                 timer_duration ?? null,
                 newOrder,
                 category,
-                next_mystery_slug?.trim() || null
+                next_mystery_slug?.trim() || null,
+                totalPhases,
+                enable_second_phase ? phase_two_persona_name : null,
+                enable_second_phase ? phase_two_persona_prompt : null,
+                enable_second_phase ? phase_two_analysis_prompt : null,
+                enable_second_phase ? phase_two_welcome_message : null
             ]
         );
 

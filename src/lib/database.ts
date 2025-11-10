@@ -117,6 +117,15 @@ export async function createTables() {
     `);
 
     await connection.execute(`
+      ALTER TABLE questionnaires
+      ADD COLUMN IF NOT EXISTS total_phases TINYINT DEFAULT 1 AFTER next_mystery_slug,
+      ADD COLUMN IF NOT EXISTS phase_two_persona_name VARCHAR(255) DEFAULT NULL AFTER total_phases,
+      ADD COLUMN IF NOT EXISTS phase_two_persona_prompt TEXT AFTER phase_two_persona_name,
+      ADD COLUMN IF NOT EXISTS phase_two_analysis_prompt TEXT AFTER phase_two_persona_prompt,
+      ADD COLUMN IF NOT EXISTS phase_two_welcome_message TEXT AFTER phase_two_analysis_prompt
+    `);
+
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS personality_assessments (
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -239,17 +248,30 @@ export async function createTables() {
         id INT AUTO_INCREMENT PRIMARY KEY,
         user_id INT NOT NULL,
         questionnaire_id INT NOT NULL,
+        session_id VARCHAR(255) UNIQUE,
+        status ENUM('pending','in-progress','completed') DEFAULT 'pending',
+        results JSON,
+        current_phase TINYINT DEFAULT 1,
+        phase_total TINYINT DEFAULT 1,
         score INT,
         max_score INT DEFAULT 100,
         description TEXT,
         supplementary_answers JSON,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         completed_at TIMESTAMP NULL,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-        FOREIGN KEY (questionnaire_id) REFERENCES questionnaires(id) ON DELETE CASCADE
+        FOREIGN KEY (questionnaire_id) REFERENCES questionnaires(id) ON DELETE CASCADE,
+        UNIQUE KEY uq_user_questionnaire (user_id, questionnaire_id)
       )
     `);
     console.log("  - جدول 'assessments' ایجاد شد.");
+
+    await connection.execute(`
+      ALTER TABLE assessments
+      ADD COLUMN IF NOT EXISTS current_phase TINYINT DEFAULT 1 AFTER results,
+      ADD COLUMN IF NOT EXISTS phase_total TINYINT DEFAULT 1 AFTER current_phase
+    `);
 
     // جدول پیام‌های چت برای هر ارزیابی
     await connection.execute(`

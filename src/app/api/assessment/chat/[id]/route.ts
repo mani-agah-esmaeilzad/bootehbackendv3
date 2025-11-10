@@ -6,6 +6,7 @@ import { getSession, authenticateToken } from '@/lib/auth';
 import { generateResponse } from '@/lib/ai';
 import type { ChatMessage } from '@/lib/ai';
 import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
+import { ensurePhaseResults, getPhasePersonaName, getPhasePersonaPrompt, getPhaseCount } from '@/lib/questionnairePhase';
 
 export const dynamic = 'force-dynamic';
 
@@ -63,7 +64,9 @@ export async function POST(
         const [assessmentRows]: any = await db.query(
             `SELECT 
                 q.persona_prompt, q.persona_name, q.secondary_persona_prompt,
-                q.secondary_persona_name, q.character_count, q.next_mystery_slug, a.results, a.user_id 
+                q.secondary_persona_name, q.character_count, q.next_mystery_slug,
+                q.phase_two_persona_prompt, q.phase_two_persona_name,
+                a.results, a.user_id, a.current_phase, a.phase_total
              FROM assessments a JOIN questionnaires q ON a.questionnaire_id = q.id
              WHERE a.questionnaire_id = ? AND a.session_id = ?`,
             [questionnaireId, sessionId]
@@ -75,19 +78,29 @@ export async function POST(
 
         const {
             persona_prompt, persona_name, secondary_persona_prompt,
-            secondary_persona_name, character_count, next_mystery_slug, results: resultsString
+            secondary_persona_name, character_count, next_mystery_slug,
+            phase_two_persona_prompt, phase_two_persona_name,
+            results: resultsString, current_phase, phase_total
         } = assessmentRows[0];
 
+        const phaseTotal = phase_total || getPhaseCount(assessmentRows[0]);
+        const currentPhase = current_phase || 1;
+
         const userTokens = await fetchUserPromptTokens(session.user.userId);
-        const primaryPersonaPrompt = persona_prompt
-            ? applyUserPromptPlaceholders(persona_prompt, userTokens)
-            : persona_prompt;
+        const personaPromptRaw = getPhasePersonaPrompt(assessmentRows[0], currentPhase) || persona_prompt || '';
+        const personaNameForPhase = getPhasePersonaName(assessmentRows[0], currentPhase) || persona_name;
+
+        const primaryPersonaPrompt = personaPromptRaw
+            ? applyUserPromptPlaceholders(personaPromptRaw, userTokens)
+            : personaPromptRaw;
         const secondaryPersona = secondary_persona_prompt
             ? applyUserPromptPlaceholders(secondary_persona_prompt, userTokens)
             : secondary_persona_prompt;
 
-        const results = resultsString ? JSON.parse(resultsString) : { history: [] };
-        const history: ChatMessage[] = Array.isArray(results.history) ? results.history : [];
+        const results = ensurePhaseResults(resultsString || null, phaseTotal);
+        const phaseIndex = Math.max(1, Math.min(currentPhase, results.phases?.length || 1)) - 1;
+        const phaseEntry = results.phases![phaseIndex];
+        const history: ChatMessage[] = Array.isArray(phaseEntry.history) ? phaseEntry.history : [];
         const updatedHistory: ChatMessage[] = [...history];
         const historyForModel: ChatMessage[] = [...history];
 
@@ -106,7 +119,7 @@ export async function POST(
         }
 
         let rawAiResponse: string | null = null;
-        let finalPersonaName: string = persona_name;
+        let finalPersonaName: string = personaNameForPhase || persona_name;
 
         // --- *** FINAL FIX: Implementing the new 2-step CLASSIFICATION logic *** ---
 
@@ -164,9 +177,15 @@ export async function POST(
 
         updatedHistory.push({ role: 'assistant', content: cleanedAiResponse });
 
+        phaseEntry.history = updatedHistory;
+        results.phases![phaseIndex] = phaseEntry;
+        if (phaseIndex === 0) {
+            results.history = updatedHistory;
+        }
+
         await db.query(
             "UPDATE assessments SET results = ? WHERE session_id = ?",
-            [JSON.stringify({ ...results, history: updatedHistory }), sessionId]
+            [JSON.stringify(results), sessionId]
         );
 
         return NextResponse.json({

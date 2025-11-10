@@ -28,6 +28,23 @@ const questionnaireSchema = z.object({
         .regex(/^[a-z0-9-]+$/i, { message: "اسلاگ رازآموزی باید فقط شامل حروف انگلیسی، اعداد و خط تیره باشد." })
         .optional()
         .nullable(),
+    enable_second_phase: z.boolean().default(false),
+    phase_two_persona_name: z.string().optional().nullable(),
+    phase_two_persona_prompt: z.string().optional().nullable(),
+    phase_two_analysis_prompt: z.string().optional().nullable(),
+    phase_two_welcome_message: z.string().optional().nullable(),
+}).superRefine((data, ctx) => {
+    if (data.enable_second_phase) {
+        if (!data.phase_two_persona_name || data.phase_two_persona_name.trim().length < 2) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phase_two_persona_name'], message: 'نام شخصیت مرحله دوم الزامی است.' });
+        }
+        if (!data.phase_two_persona_prompt || data.phase_two_persona_prompt.trim().length < 20) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phase_two_persona_prompt'], message: 'پرامپت مرحله دوم باید حداقل ۲۰ کاراکتر باشد.' });
+        }
+        if (!data.phase_two_analysis_prompt || data.phase_two_analysis_prompt.trim().length < 20) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['phase_two_analysis_prompt'], message: 'پرامپت تحلیل مرحله دوم باید حداقل ۲۰ کاراکتر باشد.' });
+        }
+    }
 });
 
 // GET Handler - To fetch a single questionnaire
@@ -56,8 +73,13 @@ export async function GET(
                 has_narrator,
                 has_timer,
                 timer_duration,
-                category
-                ,next_mystery_slug
+                category,
+                next_mystery_slug,
+                total_phases,
+                phase_two_persona_name,
+                phase_two_persona_prompt,
+                phase_two_analysis_prompt,
+                phase_two_welcome_message
             FROM questionnaires WHERE id = ?`, 
             [params.id]
         );
@@ -135,9 +157,15 @@ export async function PUT(
             has_timer,
             timer_duration,
             category,
-            next_mystery_slug
+            next_mystery_slug,
+            enable_second_phase,
+            phase_two_persona_name,
+            phase_two_persona_prompt,
+            phase_two_analysis_prompt,
+            phase_two_welcome_message
         } = validation.data;
         const { id } = params;
+        const totalPhases = enable_second_phase ? 2 : 1;
 
         // *** FINAL FIX: The UPDATE query now uses the correct column names ***
         const [result]: any = await db.query(
@@ -154,7 +182,12 @@ export async function PUT(
                 has_timer = ?,
                 timer_duration = ?,
                 category = ?,
-                next_mystery_slug = ?
+                next_mystery_slug = ?,
+                total_phases = ?,
+                phase_two_persona_name = ?,
+                phase_two_persona_prompt = ?,
+                phase_two_analysis_prompt = ?,
+                phase_two_welcome_message = ?
             WHERE id = ?`,
             [
                 name,
@@ -170,6 +203,11 @@ export async function PUT(
                 timer_duration ?? null,
                 category,
                 next_mystery_slug?.trim() || null,
+                totalPhases,
+                enable_second_phase ? phase_two_persona_name : null,
+                enable_second_phase ? phase_two_persona_prompt : null,
+                enable_second_phase ? phase_two_analysis_prompt : null,
+                enable_second_phase ? phase_two_welcome_message : null,
                 id
             ]
         );
