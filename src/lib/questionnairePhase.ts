@@ -23,6 +23,7 @@ type AssessmentResults = {
     supplementary_answers?: Record<string, any> | null;
   }>;
   currentPhase?: number;
+  supplementary_answers?: Record<string, any> | null;
 };
 
 export const getPhaseCount = (questionnaire: QuestionnaireRow): number => {
