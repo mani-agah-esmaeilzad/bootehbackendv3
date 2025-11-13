@@ -157,11 +157,12 @@ export async function createTables() {
     await connection.execute(`ALTER TABLE personality_assessments ADD COLUMN IF NOT EXISTS model VARCHAR(100) DEFAULT NULL`);
 
     const [personalityCountRows]: any = await connection.execute("SELECT COUNT(*) as count FROM personality_assessments");
-    if (personalityCountRows[0].count === 0) {
-      const insertPlaceholders = PERSONALITY_TEST_SEED.map(() => "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").join(", ");
-      const insertValues: any[] = [];
-      PERSONALITY_TEST_SEED.forEach((test) => {
-        insertValues.push(
+    const insertPersonalityTest = async (test: (typeof PERSONALITY_TEST_SEED)[number]) => {
+      await connection.execute(
+        `INSERT INTO personality_assessments 
+          (name, slug, tagline, description, report_name, highlights, persona_name, initial_prompt, persona_prompt, analysis_prompt, has_timer, timer_duration, model, is_active) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
           test.name,
           test.slug,
           test.tagline,
@@ -175,19 +176,19 @@ export async function createTables() {
           test.has_timer ?? false,
           test.timer_duration ?? null,
           test.model ?? null,
-          test.is_active ?? true
-        );
-      });
-      if (insertPlaceholders.length > 0) {
-        await connection.execute(
-          `INSERT INTO personality_assessments (name, slug, tagline, description, report_name, highlights, persona_name, initial_prompt, persona_prompt, analysis_prompt, has_timer, timer_duration, model, is_active) VALUES ${insertPlaceholders}`,
-          insertValues
-        );
-        console.log("  - داده‌های اولیه آزمون‌های شخصیتی اضافه شد.");
+          test.is_active ?? true,
+        ]
+      );
+    };
+
+    if (personalityCountRows[0].count === 0) {
+      for (const test of PERSONALITY_TEST_SEED) {
+        await insertPersonalityTest(test);
       }
+      console.log("  - داده‌های اولیه آزمون‌های شخصیتی اضافه شد.");
     } else {
       for (const test of PERSONALITY_TEST_SEED) {
-        await connection.execute(
+        const [updateResult]: any = await connection.execute(
           `UPDATE personality_assessments 
              SET tagline = ?, description = ?, report_name = ?, highlights = ?, persona_name = ?, initial_prompt = ?, persona_prompt = ?, analysis_prompt = ?, has_timer = ?, timer_duration = ?, model = ?, is_active = ? 
            WHERE slug = ?`,
@@ -207,6 +208,11 @@ export async function createTables() {
             test.slug,
           ]
         );
+
+        if (!updateResult || updateResult.affectedRows === 0) {
+          await insertPersonalityTest(test);
+          console.log(`  - آزمون شخصیتی جدید با شناسه ${test.slug} اضافه شد.`);
+        }
       }
     }
 
