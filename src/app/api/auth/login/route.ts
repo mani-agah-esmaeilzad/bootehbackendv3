@@ -65,6 +65,7 @@ export async function POST(req: Request) {
                 firstName: user.first_name,
                 lastName: user.last_name,
                 role: user.role,
+                gender: user.gender ?? null,
             },
         });
     } catch (error) {

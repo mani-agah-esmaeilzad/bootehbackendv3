@@ -104,6 +104,12 @@ export async function POST(
       );
     }
 
+    const [userProfileRows]: any = await db.query(
+      "SELECT gender FROM users WHERE id = ? LIMIT 1",
+      [userId]
+    );
+    const userGender = userProfileRows.length > 0 ? userProfileRows[0].gender ?? null : null;
+
     const initialTemplate =
       getPhaseWelcomeMessage(assessment, currentPhase) ||
       assessment.initial_prompt ||
@@ -128,6 +134,7 @@ export async function POST(
         initialMessage,
         settings: parsedSettings,
         personaName: getPhasePersonaName(assessment, currentPhase),
+        userGender,
         nextStage,
         currentPhase,
         totalPhases: phaseTotal,

@@ -18,6 +18,7 @@ const registerSchema = z.object({
   age: z.number().optional(),
   educationLevel: z.string().optional(),
   workExperience: z.string().optional(),
+  gender: z.string().optional(),
 });
 
 // تابعی برای ساختن یک نام کاربری منحصر به فرد
@@ -58,7 +59,7 @@ export async function POST(req: Request) {
     
     const { 
         email, password, firstName, lastName,
-        phoneNumber, age, educationLevel, workExperience 
+        phoneNumber, age, educationLevel, workExperience, gender
     } = validation.data;
 
     const [existingEmail] = await db.query(
@@ -82,8 +83,8 @@ export async function POST(req: Request) {
     const [result] = await db.query(
       `INSERT INTO users (
         username, email, password_hash, first_name, last_name,
-        phone_number, age, education_level, work_experience
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        phone_number, age, education_level, work_experience, gender
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         username,
         email,
@@ -93,7 +94,8 @@ export async function POST(req: Request) {
         phoneNumber ?? null,
         age ?? null,
         educationLevel ?? null,
-        workExperience ?? null
+        workExperience ?? null,
+        gender?.trim() || null
       ]
     );
 
@@ -108,6 +110,7 @@ export async function POST(req: Request) {
       email,
       firstName,
       lastName,
+      gender: gender?.trim() || null,
     };
 
     return NextResponse.json({
