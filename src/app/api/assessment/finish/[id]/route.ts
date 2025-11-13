@@ -83,6 +83,48 @@ export async function POST(
             });
         }
 
+        const phaseAnalyses: Array<{
+            phase: number;
+            personaName: string | null;
+            prompt?: string | null;
+            analysis: Record<string, any> | null;
+            supplementary_answers?: Record<string, any> | null;
+        }> = [];
+
+        if (Array.isArray(results.phases)) {
+            for (const phaseResult of results.phases) {
+                const phaseIndex = typeof phaseResult.phase === 'number' && phaseResult.phase > 0 ? phaseResult.phase : phaseAnalyses.length + 1;
+                const phaseHistory = Array.isArray(phaseResult.history) ? phaseResult.history : [];
+                const phasePromptRaw = getPhaseAnalysisPrompt(questionnaireRow, phaseIndex);
+                let phaseAnalysisObject: Record<string, any> | null = null;
+
+                if (phasePromptRaw && phaseHistory.length > 0) {
+                    const personalizedPhasePrompt = applyUserPromptPlaceholders(phasePromptRaw, userTokens);
+                    const phaseConversationJson = JSON.stringify(phaseHistory);
+                    try {
+                        const phaseAnalysisJsonString = await analyzeConversation(
+                            phaseConversationJson,
+                            personalizedPhasePrompt || phasePromptRaw || ''
+                        );
+                        phaseAnalysisObject = JSON.parse(phaseAnalysisJsonString);
+                    } catch (phaseError) {
+                        console.error(`Failed to parse phase ${phaseIndex} analysis`, phaseError);
+                        phaseAnalysisObject = {
+                            report: "تحلیل این مرحله در دسترس نیست یا به‌درستی پردازش نشد.",
+                        };
+                    }
+                }
+
+                phaseAnalyses.push({
+                    phase: phaseIndex,
+                    personaName: getPhasePersonaName(questionnaireRow, phaseIndex),
+                    prompt: phasePromptRaw || null,
+                    analysis: phaseAnalysisObject,
+                    supplementary_answers: phaseResult.supplementary_answers || null,
+                });
+            }
+        }
+
         const conversationJson = JSON.stringify(flattenPhaseHistory(results));
         const finalAnalysisPromptRaw = getPhaseAnalysisPrompt(questionnaireRow, currentPhase) || analysis_prompt;
 
@@ -114,10 +156,15 @@ export async function POST(
             }, {} as Record<string, any>)
             : { phase_1: supplementary_answers };
 
+        const finalAnalysisWithPhases = {
+            ...(finalAnalysisObject || {}),
+            phase_breakdown: phaseAnalyses,
+        };
+
         const updatedResults = { 
             ...results, 
             supplementary_answers: aggregatedSupplementary,
-            final_analysis: finalAnalysisObject 
+            final_analysis: finalAnalysisWithPhases 
         };
 
         // 3. ذخیره آبجکت نهایی در دیتابیس
