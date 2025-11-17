@@ -158,7 +158,11 @@ export async function createTables() {
 
     const [personalityCountRows]: any = await connection.execute("SELECT COUNT(*) as count FROM personality_assessments");
     const insertPersonalityTest = async (test: (typeof PERSONALITY_TEST_SEED)[number]) => {
-      await connection.execute(
+      const activeConnection = connection;
+      if (!activeConnection) {
+        throw new Error('Database connection not initialized.');
+      }
+      await activeConnection.execute(
         `INSERT INTO personality_assessments 
           (name, slug, tagline, description, report_name, highlights, persona_name, initial_prompt, persona_prompt, analysis_prompt, has_timer, timer_duration, model, is_active) 
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
