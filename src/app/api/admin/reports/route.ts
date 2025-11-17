@@ -23,6 +23,7 @@ export async function GET(request: Request) {
                 u.username,
                 u.first_name,
                 u.last_name,
+                q.id as questionnaire_id,
                 q.name as questionnaire_title
              FROM assessments a
              JOIN users u ON a.user_id = u.id
