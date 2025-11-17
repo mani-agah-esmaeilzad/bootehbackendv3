@@ -1,5 +1,5 @@
 // src/lib/database.ts
-import mysql from 'mysql2/promise';
+import mysql, { PoolConnection } from 'mysql2/promise';
 import { PERSONALITY_TEST_SEED } from '@/constants/personalityTestsSeed';
 
 // پیکربندی دیتابیس از متغیرهای محیطی خوانده می‌شود
@@ -35,9 +35,12 @@ export async function getConnectionWithRetry(maxRetries = 3, delay = 1000) {
 
 // تابع برای تست اولیه اتصال به دیتابیس
 export async function testConnection() {
-  let connection;
+  let connection: PoolConnection | null = null;
   try {
     connection = await pool.getConnection();
+    if (!connection) {
+      throw new Error('Failed to acquire a database connection.');
+    }
     console.log('✅ اتصال به دیتابیس MySQL با موفقیت برقرار شد.');
     return true;
   } catch (error) {
@@ -50,9 +53,12 @@ export async function testConnection() {
 
 // تابع اصلی برای ساختاردهی و ایجاد تمام جداول مورد نیاز پروژه
 export async function createTables() {
-  let connection;
+  let connection: PoolConnection | null = null;
   try {
     connection = await pool.getConnection();
+    if (!connection) {
+      throw new Error('Failed to acquire a database connection.');
+    }
     
     console.log("شروع فرآیند ایجاد جداول...");
 
