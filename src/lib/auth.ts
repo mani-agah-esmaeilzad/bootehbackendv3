@@ -105,9 +105,14 @@ export const extractTokenFromHeader = (header: string | null | undefined): strin
 };
 
 export const verifyAdmin = async (req: NextRequest) => {
-  const token = extractTokenFromHeader(req.headers.get('Authorization'));
-  if (!token) return { admin: null, error: 'توکن احراز هویت ارسال نشده است' };
-  
+  let token = extractTokenFromHeader(req.headers.get('Authorization'));
+  if (!token) {
+    token = req.cookies.get('authToken')?.value ?? null;
+  }
+  if (!token) {
+    return { admin: null, error: 'توکن احراز هویت ارسال نشده است' };
+  }
+
   const decoded = authenticateToken(token);
   if (!decoded || decoded.role !== 'admin') {
     return { admin: null, error: 'دسترسی غیرمجاز. شما ادمین نیستید.' };
