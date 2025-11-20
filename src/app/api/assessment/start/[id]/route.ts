@@ -26,6 +26,20 @@ export async function POST(
       return NextResponse.json({ success: false, message: 'Invalid assessment ID' }, { status: 400 });
     }
 
+    const [assignmentCheckRows]: any = await db.query(
+      `SELECT 
+         COUNT(*) AS total_assignments,
+         SUM(CASE WHEN questionnaire_id = ? THEN 1 ELSE 0 END) AS matching_assignments
+       FROM user_questionnaire_assignments
+       WHERE user_id = ?`,
+      [questionnaireId, userId]
+    );
+    const totalAssignments = Number(assignmentCheckRows?.[0]?.total_assignments || 0);
+    const matchingAssignments = Number(assignmentCheckRows?.[0]?.matching_assignments || 0);
+    if (totalAssignments > 0 && matchingAssignments === 0) {
+      return NextResponse.json({ success: false, message: 'این مرحله برای حساب شما فعال نشده است' }, { status: 403 });
+    }
+
     const [assessmentRows]: any = await db.query(
       `SELECT 
         q.id, 

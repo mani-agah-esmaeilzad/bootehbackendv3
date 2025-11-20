@@ -12,9 +12,9 @@ export async function GET(
     try {
         const token = extractTokenFromHeader(request.headers.get('Authorization'));
         if (!token) return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });
-        
+
         const decodedToken = authenticateToken(token);
-        
+
         // *** FIX APPLIED HERE ***
         // We now check if the token is null OR if the role is not 'admin'.
         if (!decodedToken || decodedToken.role !== 'admin') {

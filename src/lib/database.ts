@@ -347,6 +347,20 @@ export async function createTables() {
     console.log("  - جدول 'organization_users' ایجاد شد.");
 
     await connection.execute(`
+      CREATE TABLE IF NOT EXISTS user_questionnaire_assignments (
+        user_id INT NOT NULL,
+        questionnaire_id INT NOT NULL,
+        display_order INT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, questionnaire_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (questionnaire_id) REFERENCES questionnaires(id) ON DELETE CASCADE
+      )
+    `);
+    console.log("  - جدول 'user_questionnaire_assignments' ایجاد شد.");
+
+    await connection.execute(`
       CREATE TABLE IF NOT EXISTS blog_posts (
         id INT AUTO_INCREMENT PRIMARY KEY,
         title VARCHAR(255) NOT NULL,

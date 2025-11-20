@@ -14,6 +14,13 @@ export async function GET(req: Request) {
         }
         const userId = session.user.userId;
 
+        const [assignmentRows]: any = await db.query(
+            'SELECT COUNT(*) as count FROM user_questionnaire_assignments WHERE user_id = ?',
+            [userId]
+        );
+        const hasCustomAssignments = Number(assignmentRows?.[0]?.count || 0) > 0;
+        const assignmentFilterClause = hasCustomAssignments ? 'AND uqa.questionnaire_id IS NOT NULL' : '';
+
         // *** FINAL FIX: Using correct column names from your schema ***
         const [rows] = await db.query(
             `SELECT 
@@ -23,16 +30,29 @@ export async function GET(req: Request) {
                 q.category,
                 q.display_order,
                 q.next_mystery_slug,
-                COALESCE(a.status, 'pending') as status
+                COALESCE(a.status, 'pending') as status,
+                uqa.display_order as assignment_order
              FROM questionnaires q
              LEFT JOIN (
                 SELECT questionnaire_id, status, updated_at
                 FROM assessments
                 WHERE user_id = ?
              ) as a ON q.id = a.questionnaire_id
+             LEFT JOIN (
+                SELECT questionnaire_id, display_order
+                FROM user_questionnaire_assignments
+                WHERE user_id = ?
+             ) as uqa ON q.id = uqa.questionnaire_id
              WHERE q.has_narrator = 0
-             ORDER BY q.display_order ASC, q.id ASC`,
-            [userId]
+             ${assignmentFilterClause}
+             ORDER BY 
+                CASE 
+                    WHEN uqa.display_order IS NOT NULL THEN uqa.display_order
+                    WHEN q.display_order IS NOT NULL THEN q.display_order
+                    ELSE q.id
+                END ASC,
+                q.id ASC`,
+            [userId, userId]
         );
 
         const questionnaires = rows as any[];
@@ -75,6 +95,9 @@ export async function GET(req: Request) {
 
         questionnaires.forEach((questionnaire: any) => {
             const categoryName = questionnaire.category || 'سایر دسته‌بندی‌ها';
+            const stageOrder = typeof questionnaire.assignment_order === 'number' && !Number.isNaN(questionnaire.assignment_order)
+                ? questionnaire.assignment_order
+                : (typeof questionnaire.display_order === 'number' ? questionnaire.display_order : questionnaire.id);
             const questionnaireStringId = `questionnaire:${questionnaire.id}`;
             stages.push({
                 type: 'questionnaire',
@@ -83,7 +106,7 @@ export async function GET(req: Request) {
                 title: questionnaire.title,
                 description: questionnaire.description,
                 category: categoryName,
-                display_order: questionnaire.display_order,
+                display_order: stageOrder,
                 rawStatus: questionnaire.status,
                 next_mystery_slug: questionnaire.next_mystery_slug ?? null,
                 accentColor: null,
@@ -99,7 +122,7 @@ export async function GET(req: Request) {
                         title: mystery.name,
                         description: mystery.short_description,
                         category: categoryName,
-                        display_order: questionnaire.display_order + 0.01,
+                        display_order: stageOrder + 0.01,
                         rawStatus: mysteryStatusMap.get(questionnaire.next_mystery_slug) || 'pending',
                         parentQuestionnaireId: questionnaire.id,
                         accentColor: '#F59E0B',

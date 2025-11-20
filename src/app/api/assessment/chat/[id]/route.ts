@@ -44,6 +44,7 @@ export async function POST(
             return NextResponse.json({ success: false, message: 'توکن ارائه نشده یا نامعتبر است' }, { status: 401 });
         }
 
+        const userId = session.user.userId;
         const questionnaireId = parseInt(params.id, 10);
         const { message: rawMessage, session_id: sessionId, autoStart } = await request.json();
         const isAutoStart = Boolean(autoStart);
@@ -51,6 +52,20 @@ export async function POST(
 
         if (isNaN(questionnaireId) || !sessionId || (!isAutoStart && (!userMessage || userMessage.trim().length === 0))) {
             return NextResponse.json({ success: false, message: 'اطلاعات ارسالی ناقص است' }, { status: 400 });
+        }
+
+        const [assignmentCheckRows]: any = await db.query(
+            `SELECT 
+                COUNT(*) AS total_assignments,
+                SUM(CASE WHEN questionnaire_id = ? THEN 1 ELSE 0 END) AS matching_assignments
+             FROM user_questionnaire_assignments
+             WHERE user_id = ?`,
+            [questionnaireId, userId]
+        );
+        const totalAssignments = Number(assignmentCheckRows?.[0]?.total_assignments || 0);
+        const matchingAssignments = Number(assignmentCheckRows?.[0]?.matching_assignments || 0);
+        if (totalAssignments > 0 && matchingAssignments === 0) {
+            return NextResponse.json({ success: false, message: 'دسترسی به این مرحله برای شما فعال نیست' }, { status: 403 });
         }
 
         console.log('--- ASSESSMENT CHAT REQUEST ---', {
