@@ -3,6 +3,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
+import { RowDataPacket } from 'mysql2';
 import {
   AssignmentInfo,
   CompletedAssessmentInfo,
@@ -28,7 +29,8 @@ export async function GET(
       return NextResponse.json({ success: false, message: 'شناسه کاربر نامعتبر است' }, { status: 400 });
     }
 
-    const [userRows] = await db.query<UserBasicInfo[]>(
+    type UserRow = RowDataPacket & UserBasicInfo;
+    const [userRows] = await db.query<UserRow[]>(
       `SELECT id, username, first_name, last_name, email, is_active
        FROM users
        WHERE id = ?
@@ -42,7 +44,8 @@ export async function GET(
 
     const userInfo = userRows[0];
 
-    const [assignmentRows] = await db.query<AssignmentInfo[]>(
+    type AssignmentRow = RowDataPacket & AssignmentInfo;
+    const [assignmentRows] = await db.query<AssignmentRow[]>(
       `SELECT 
           uqa.user_id,
           uqa.questionnaire_id,
@@ -61,7 +64,8 @@ export async function GET(
       return NextResponse.json({ success: false, message: 'هنوز مسیری برای این کاربر تعریف نشده است' }, { status: 404 });
     }
 
-    const [completedRows] = await db.query<CompletedAssessmentInfo[]>(
+    type CompletionRow = RowDataPacket & CompletedAssessmentInfo;
+    const [completedRows] = await db.query<CompletionRow[]>(
       `SELECT 
           a.id AS assessment_id,
           a.user_id,
