@@ -119,10 +119,11 @@ export async function POST(
     }
 
     const [userProfileRows]: any = await db.query(
-      "SELECT gender FROM users WHERE id = ? LIMIT 1",
+      "SELECT gender, age FROM users WHERE id = ? LIMIT 1",
       [userId]
     );
     const userGender = userProfileRows.length > 0 ? userProfileRows[0].gender ?? null : null;
+    const userAge = userProfileRows.length > 0 ? userProfileRows[0].age ?? null : null;
 
     const initialTemplate =
       getPhaseWelcomeMessage(assessment, currentPhase) ||
@@ -149,6 +150,7 @@ export async function POST(
         settings: parsedSettings,
         personaName: getPhasePersonaName(assessment, currentPhase),
         userGender,
+        userAge,
         nextStage,
         currentPhase,
         totalPhases: phaseTotal,
