@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
-import { analyzeConversation, getInitialAssessmentPrompt } from '@/lib/ai';
+import { analyzeConversation, generateSentimentInsight, getInitialAssessmentPrompt } from '@/lib/ai';
 import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 import { ensurePhaseResults, flattenPhaseHistory, getPhaseAnalysisPrompt, getPhaseCount, getPhasePersonaName, getPhaseWelcomeMessage } from '@/lib/questionnairePhase';
 import { v4 as uuidv4 } from 'uuid';
@@ -156,9 +156,15 @@ export async function POST(
             }, {} as Record<string, any>)
             : { phase_1: supplementary_answers };
 
+        const sentimentInsight = await generateSentimentInsight(
+            conversationJson,
+            (finalAnalysisObject as Record<string, any>)?.sentiment_analysis,
+        );
+
         const finalAnalysisWithPhases = {
             ...(finalAnalysisObject || {}),
             phase_breakdown: phaseAnalyses,
+            sentiment_insight: sentimentInsight,
         };
 
         const updatedResults = { 

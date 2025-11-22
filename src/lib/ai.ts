@@ -20,6 +20,13 @@ export interface ChatMessage {
   content: string;
 }
 
+export type SentimentInsight = {
+  headline: string;
+  bullets: string[];
+  dominant_label?: string | null;
+  confidence_note?: string | null;
+};
+
 /**
  * تابعی برای استخراج یک رشته JSON تمیز از داخل یک بلاک کد مارک‌داون
  */
@@ -143,6 +150,86 @@ export const analyzeConversation = async (conversationJson: string, analysisProm
             factor_scores: []
         });
     }
+};
+
+const defaultSentimentInsight: SentimentInsight = {
+  headline: "برای این گزارش دادهٔ معتبری جهت تحلیل کیفی احساسات ثبت نشده است.",
+  bullets: [
+    "برای فعال‌سازی این بخش، مطمئن شوید مدل تحلیل احساسات حداقل یکی از برچسب‌های مثبت، منفی یا خنثی را بازگرداند.",
+    "پیشنهاد: سوالات واکنشی بیشتری مطرح کنید تا پاسخ‌دهنده لحن دقیق‌تری ارائه دهد.",
+  ],
+};
+
+const sanitizeSentimentEntries = (sentimentAnalysis: Record<string, any> | null | undefined) => {
+  if (!sentimentAnalysis || typeof sentimentAnalysis !== "object") return {};
+  const sanitized: Record<string, number> = {};
+  Object.entries(sentimentAnalysis).forEach(([key, value]) => {
+    const numericValue = typeof value === "number" ? value : Number(value);
+    if (!Number.isFinite(numericValue)) return;
+    sanitized[key] = numericValue;
+  });
+  return sanitized;
+};
+
+export const generateSentimentInsight = async (
+  conversationJson: string,
+  sentimentAnalysis: Record<string, any> | null | undefined,
+): Promise<SentimentInsight> => {
+  const safeSentiment = sanitizeSentimentEntries(sentimentAnalysis);
+  const fallback = { ...defaultSentimentInsight };
+
+  try {
+    const systemMessage = `شما یک تحلیلگر داده برای واحد منابع انسانی هستید که باید با لحن فارسی رسمی و مختصر بنویسید.`;
+    const userMessage = `
+      بر اساس مکالمه زیر و داده‌های کمی تحلیل احساسات، یک جمع‌بندی کوتاه تولید کن.
+      - خروجی باید JSON و شامل کلیدهای "headline" و "bullets" باشد.
+      - headline حداکثر ۲ جمله باشد و با ذکر احساس غالب و درصد تقریبی شروع شود.
+      - bullets شامل 2 تا 4 نکته قابل اجرا برای مدیر باشد. هر نکته حداکثر 32 کلمه.
+      - اگر داده احساسی خالی است، در headline همین را توضیح بده و در bullets پیشنهادهای تکمیلی ارائه کن.
+      - متن باید ۱۰۰٪ فارسی و بدون ایموجی یا نقل‌قول باشد.
+
+      داده کمی احساسات:
+      ${JSON.stringify(safeSentiment)}
+
+      تاریخچه مکالمه:
+      ${conversationJson}
+    `;
+
+    const response = await openai.chat.completions.create({
+      model: DEFAULT_MODEL,
+      messages: [
+        { role: "system", content: systemMessage },
+        { role: "user", content: userMessage },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.4,
+    });
+
+    const content = response.choices[0]?.message?.content;
+    if (!content) {
+      return fallback;
+    }
+    const parsed = JSON.parse(content);
+    const headline =
+      typeof parsed?.headline === "string" && parsed.headline.trim().length > 0
+        ? parsed.headline.trim()
+        : fallback.headline;
+    const bullets = Array.isArray(parsed?.bullets)
+      ? parsed.bullets
+          .map((item: any) => (typeof item === "string" ? item.trim() : ""))
+          .filter((item: string) => item.length > 0)
+      : fallback.bullets;
+
+    return {
+      headline,
+      bullets: bullets.length > 0 ? bullets : fallback.bullets,
+      dominant_label: typeof parsed?.dominant_label === "string" ? parsed.dominant_label : undefined,
+      confidence_note: typeof parsed?.confidence_note === "string" ? parsed.confidence_note : undefined,
+    };
+  } catch (error) {
+    console.error("Error generating sentiment insight:", error);
+    return fallback;
+  }
 };
 
 type MysteryImageInfo = {
