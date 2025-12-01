@@ -128,7 +128,8 @@ export async function createTables() {
       ADD COLUMN IF NOT EXISTS phase_two_persona_name VARCHAR(255) DEFAULT NULL AFTER total_phases,
       ADD COLUMN IF NOT EXISTS phase_two_persona_prompt TEXT AFTER phase_two_persona_name,
       ADD COLUMN IF NOT EXISTS phase_two_analysis_prompt TEXT AFTER phase_two_persona_prompt,
-      ADD COLUMN IF NOT EXISTS phase_two_welcome_message TEXT AFTER phase_two_analysis_prompt
+      ADD COLUMN IF NOT EXISTS phase_two_welcome_message TEXT AFTER phase_two_analysis_prompt,
+      ADD COLUMN IF NOT EXISTS chart_modules JSON AFTER phase_two_welcome_message
     `);
 
     await connection.execute(`

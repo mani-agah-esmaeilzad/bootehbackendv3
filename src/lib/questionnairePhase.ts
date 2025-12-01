@@ -12,6 +12,7 @@ type QuestionnaireRow = RowDataPacket & {
   phase_two_analysis_prompt?: string | null;
   phase_two_welcome_message?: string | null;
   total_phases?: number | null;
+  chart_modules?: any;
 };
 
 type AssessmentResults = {

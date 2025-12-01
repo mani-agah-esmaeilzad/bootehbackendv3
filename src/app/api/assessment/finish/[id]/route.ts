@@ -6,6 +6,7 @@ import { getSession } from '@/lib/auth';
 import { analyzeConversation, generateSentimentInsight, getInitialAssessmentPrompt } from '@/lib/ai';
 import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 import { ensurePhaseResults, flattenPhaseHistory, getPhaseAnalysisPrompt, getPhaseCount, getPhasePersonaName, getPhaseWelcomeMessage } from '@/lib/questionnairePhase';
+import { composeAnalysisPrompt } from '@/lib/chartModules';
 import { v4 as uuidv4 } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,8 @@ export async function POST(
                     q.analysis_prompt, q.persona_name, q.persona_prompt,
                     q.phase_two_persona_name, q.phase_two_persona_prompt,
                     q.phase_two_analysis_prompt, q.phase_two_welcome_message,
-                    q.welcome_message, q.name as questionnaire_title
+                    q.welcome_message, q.name as questionnaire_title,
+                    q.chart_modules
              FROM assessments a
              JOIN questionnaires q ON a.questionnaire_id = q.id
              WHERE a.user_id = ? AND a.questionnaire_id = ? AND a.session_id = ?`,
@@ -44,6 +46,16 @@ export async function POST(
         }
 
         const questionnaireRow = rows[0];
+        let chartModules: any[] = [];
+        if (questionnaireRow.chart_modules) {
+            try {
+                chartModules = typeof questionnaireRow.chart_modules === 'string'
+                    ? JSON.parse(questionnaireRow.chart_modules)
+                    : questionnaireRow.chart_modules;
+            } catch {
+                chartModules = [];
+            }
+        }
         const { id: assessmentId, results: resultsString, analysis_prompt, current_phase, phase_total } = questionnaireRow;
         const userTokens = await fetchUserPromptTokens(userId);
         const totalPhases = phase_total || getPhaseCount(questionnaireRow);
@@ -126,7 +138,8 @@ export async function POST(
         }
 
         const conversationJson = JSON.stringify(flattenPhaseHistory(results));
-        const finalAnalysisPromptRaw = getPhaseAnalysisPrompt(questionnaireRow, currentPhase) || analysis_prompt;
+        const basePrompt = getPhaseAnalysisPrompt(questionnaireRow, currentPhase) || analysis_prompt;
+        const finalAnalysisPromptRaw = composeAnalysisPrompt(basePrompt, chartModules);
 
         // 1. دریافت رشته JSON تحلیل از AI
         const personalizedAnalysisPrompt = finalAnalysisPromptRaw

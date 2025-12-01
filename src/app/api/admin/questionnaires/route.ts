@@ -9,6 +9,23 @@ import { QUESTIONNAIRE_CATEGORIES } from '@/constants/questionnaireCategories';
 
 export const dynamic = 'force-dynamic';
 
+const chartModuleItemSchema = z.object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    maxScore: z.number().optional(),
+    category: z.string().optional(),
+    description: z.string().optional(),
+});
+
+const chartModuleSchema = z.object({
+    id: z.string().optional(),
+    type: z.string().min(1),
+    title: z.string().optional(),
+    enabled: z.boolean().optional(),
+    items: z.array(chartModuleItemSchema).optional(),
+    settings: z.record(z.any()).optional(),
+});
+
 const createQuestionnaireSchema = z.object({
     name: z.string().min(1, "نام پرسشنامه نمی‌تواند خالی باشد"),
     description: z.string().optional(),
@@ -33,6 +50,7 @@ const createQuestionnaireSchema = z.object({
     phase_two_persona_prompt: z.string().optional().nullable(),
     phase_two_analysis_prompt: z.string().optional().nullable(),
     phase_two_welcome_message: z.string().optional().nullable(),
+    chart_modules: z.array(chartModuleSchema).optional().default([]),
 }).superRefine((data, ctx) => {
     if (data.enable_second_phase) {
         if (!data.phase_two_persona_name || data.phase_two_persona_name.trim().length < 2) {
@@ -64,7 +82,8 @@ export async function GET(request: Request) {
                 display_order,
                 has_narrator,
                 category,
-                next_mystery_slug
+                next_mystery_slug,
+                chart_modules
              FROM questionnaires 
              ORDER BY display_order ASC, id ASC`
         );
@@ -108,7 +127,8 @@ export async function POST(request: Request) {
             phase_two_persona_name,
             phase_two_persona_prompt,
             phase_two_analysis_prompt,
-            phase_two_welcome_message
+            phase_two_welcome_message,
+            chart_modules
         } = validation.data;
 
         const [orderResult]: any = await db.query("SELECT MAX(display_order) as max_order FROM questionnaires");
@@ -135,8 +155,9 @@ export async function POST(request: Request) {
                 phase_two_persona_name,
                 phase_two_persona_prompt,
                 phase_two_analysis_prompt,
-                phase_two_welcome_message
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                phase_two_welcome_message,
+                chart_modules
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name,
                 description,
@@ -156,7 +177,8 @@ export async function POST(request: Request) {
                 enable_second_phase ? phase_two_persona_name : null,
                 enable_second_phase ? phase_two_persona_prompt : null,
                 enable_second_phase ? phase_two_analysis_prompt : null,
-                enable_second_phase ? phase_two_welcome_message : null
+                enable_second_phase ? phase_two_welcome_message : null,
+                JSON.stringify(chart_modules ?? [])
             ]
         );
 

@@ -9,6 +9,23 @@ import { QUESTIONNAIRE_CATEGORIES } from '@/constants/questionnaireCategories';
 export const dynamic = 'force-dynamic';
 
 // Zod schema for validation, now aligned with the database schema
+const chartModuleItemSchema = z.object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    maxScore: z.number().optional(),
+    category: z.string().optional(),
+    description: z.string().optional(),
+});
+
+const chartModuleSchema = z.object({
+    id: z.string().optional(),
+    type: z.string().min(1),
+    title: z.string().optional(),
+    enabled: z.boolean().optional(),
+    items: z.array(chartModuleItemSchema).optional(),
+    settings: z.record(z.any()).optional(),
+});
+
 const questionnaireSchema = z.object({
     name: z.string().min(1, "نام پرسشنامه نمی‌تواند خالی باشد"),
     description: z.string().optional(),
@@ -33,6 +50,7 @@ const questionnaireSchema = z.object({
     phase_two_persona_prompt: z.string().optional().nullable(),
     phase_two_analysis_prompt: z.string().optional().nullable(),
     phase_two_welcome_message: z.string().optional().nullable(),
+    chart_modules: z.array(chartModuleSchema).optional().default([]),
 }).superRefine((data, ctx) => {
     if (data.enable_second_phase) {
         if (!data.phase_two_persona_name || data.phase_two_persona_name.trim().length < 2) {
@@ -79,7 +97,8 @@ export async function GET(
                 phase_two_persona_name,
                 phase_two_persona_prompt,
                 phase_two_analysis_prompt,
-                phase_two_welcome_message
+                phase_two_welcome_message,
+                chart_modules
             FROM questionnaires WHERE id = ?`, 
             [params.id]
         );
@@ -88,7 +107,17 @@ export async function GET(
         if (questionnaires.length === 0) {
             return NextResponse.json({ success: false, message: 'پرسشنامه یافت نشد' }, { status: 404 });
         }
-        return NextResponse.json({ success: true, data: questionnaires[0] });
+        const questionnaire = questionnaires[0] as any;
+        if (questionnaire.chart_modules) {
+            try {
+                questionnaire.chart_modules = JSON.parse(questionnaire.chart_modules);
+            } catch {
+                questionnaire.chart_modules = [];
+            }
+        } else {
+            questionnaire.chart_modules = [];
+        }
+        return NextResponse.json({ success: true, data: questionnaire });
 
     } catch (error) {
         console.error("Get Questionnaire Detail Error:", error);
@@ -162,7 +191,8 @@ export async function PUT(
             phase_two_persona_name,
             phase_two_persona_prompt,
             phase_two_analysis_prompt,
-            phase_two_welcome_message
+            phase_two_welcome_message,
+            chart_modules
         } = validation.data;
         const { id } = params;
         const totalPhases = enable_second_phase ? 2 : 1;
@@ -187,7 +217,8 @@ export async function PUT(
                 phase_two_persona_name = ?,
                 phase_two_persona_prompt = ?,
                 phase_two_analysis_prompt = ?,
-                phase_two_welcome_message = ?
+                phase_two_welcome_message = ?,
+                chart_modules = ?
             WHERE id = ?`,
             [
                 name,
@@ -208,6 +239,7 @@ export async function PUT(
                 enable_second_phase ? phase_two_persona_prompt : null,
                 enable_second_phase ? phase_two_analysis_prompt : null,
                 enable_second_phase ? phase_two_welcome_message : null,
+                JSON.stringify(chart_modules ?? []),
                 id
             ]
         );
