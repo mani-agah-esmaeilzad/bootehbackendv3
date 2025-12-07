@@ -7,6 +7,7 @@ import { analyzeConversation, generateSentimentInsight, getInitialAssessmentProm
 import { fetchUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
 import { ensurePhaseResults, flattenPhaseHistory, getPhaseAnalysisPrompt, getPhaseCount, getPhasePersonaName, getPhaseWelcomeMessage } from '@/lib/questionnairePhase';
 import { composeAnalysisPrompt } from '@/lib/chartModules';
+import { buildWordCloudFromHistory } from '@/lib/wordCloud';
 import { v4 as uuidv4 } from 'uuid';
 
 export const dynamic = 'force-dynamic';
@@ -137,7 +138,9 @@ export async function POST(
             }
         }
 
-        const conversationJson = JSON.stringify(flattenPhaseHistory(results));
+        const flattenedHistory = flattenPhaseHistory(results);
+        const conversationJson = JSON.stringify(flattenedHistory);
+        const userWordCloud = buildWordCloudFromHistory(flattenedHistory);
         const basePrompt = getPhaseAnalysisPrompt(questionnaireRow, currentPhase) || analysis_prompt;
         const finalAnalysisPromptRaw = composeAnalysisPrompt(basePrompt, chartModules);
 
@@ -178,6 +181,7 @@ export async function POST(
             ...(finalAnalysisObject || {}),
             phase_breakdown: phaseAnalyses,
             sentiment_insight: sentimentInsight,
+            word_cloud_full: userWordCloud,
         };
 
         const updatedResults = { 
