@@ -10,6 +10,54 @@ import { getPhaseCount, getPhaseWelcomeMessage, getPhasePersonaName, ensurePhase
 
 export const dynamic = 'force-dynamic';
 
+async function clearPersistedSessionState(sessionId?: string | null, assessmentId?: number | null): Promise<void> {
+  if (!sessionId && !assessmentId) {
+    return;
+  }
+
+  if (sessionId) {
+    try {
+      await db.query('DELETE FROM assessment_states WHERE session_id = ?', [sessionId]);
+    } catch (error) {
+      console.warn(`Failed to delete assessment_states for session ${sessionId}:`, error);
+      if (assessmentId) {
+        try {
+          await db.query('DELETE FROM assessment_states WHERE assessment_id = ?', [assessmentId]);
+        } catch (innerError) {
+          console.warn(`Failed to delete assessment_states by assessment ${assessmentId}:`, innerError);
+        }
+      }
+    }
+
+    try {
+      await db.query('DELETE FROM chat_messages WHERE session_id = ?', [sessionId]);
+    } catch (error) {
+      console.warn(`Failed to delete chat_messages for session ${sessionId}:`, error);
+      if (assessmentId) {
+        try {
+          await db.query('DELETE FROM chat_messages WHERE assessment_id = ?', [assessmentId]);
+        } catch (innerError) {
+          console.warn(`Failed to delete chat_messages by assessment ${assessmentId}:`, innerError);
+        }
+      }
+    }
+    return;
+  }
+
+  if (assessmentId) {
+    try {
+      await db.query('DELETE FROM assessment_states WHERE assessment_id = ?', [assessmentId]);
+    } catch (error) {
+      console.warn(`Failed to delete assessment_states by assessment ${assessmentId}:`, error);
+    }
+    try {
+      await db.query('DELETE FROM chat_messages WHERE assessment_id = ?', [assessmentId]);
+    } catch (error) {
+      console.warn(`Failed to delete chat_messages by assessment ${assessmentId}:`, error);
+    }
+  }
+}
+
 export async function POST(
   req: Request,
   { params }: { params: { id: string } }
@@ -75,25 +123,35 @@ export async function POST(
     const storedPhaseTotal = assessment.assessment_phase_total || derivedPhaseTotal;
     const phaseTotal = Math.max(storedPhaseTotal, derivedPhaseTotal);
     const userTokens = await fetchUserPromptTokens(userId);
-    const existingAssessmentId = assessment.assessment_id;
-    const existingStatus = assessment.assessment_status;
-    const existingSessionId = assessment.assessment_session_id;
-    let sessionId = existingSessionId || uuidv4();
-    let currentPhase = assessment.assessment_current_phase || 1;
-    let results = ensurePhaseResults(assessment.assessment_results || null, phaseTotal);
+    const existingAssessmentId = assessment.assessment_id ?? null;
+    const existingSessionId = assessment.assessment_session_id ?? null;
+    const sessionId = uuidv4();
+    const currentPhase = 1;
+    const results = ensurePhaseResults(null, phaseTotal);
     results.currentPhase = currentPhase;
+    const serializedResults = JSON.stringify(results);
 
-    const canResume =
-      Boolean(existingAssessmentId) &&
-      existingStatus === 'in-progress' &&
-      Boolean(existingSessionId);
+    if (existingAssessmentId || existingSessionId) {
+      await clearPersistedSessionState(existingSessionId, existingAssessmentId);
+    }
 
-    if (!canResume) {
-      sessionId = uuidv4();
-      currentPhase = 1;
-      results = ensurePhaseResults(null, phaseTotal);
-      results.currentPhase = currentPhase;
-      const serializedResults = JSON.stringify(results);
+    if (existingAssessmentId) {
+      await db.query(
+        `UPDATE assessments 
+           SET status = 'in-progress',
+               session_id = ?,
+               results = ?,
+               current_phase = ?,
+               phase_total = ?,
+               supplementary_answers = NULL,
+               score = NULL,
+               description = NULL,
+               completed_at = NULL,
+               updated_at = NOW()
+         WHERE id = ?`,
+        [sessionId, serializedResults, currentPhase, phaseTotal, existingAssessmentId]
+      );
+    } else {
       await db.query(
         `INSERT INTO assessments (user_id, questionnaire_id, status, session_id, results, updated_at, current_phase, phase_total)
          VALUES (?, ?, 'in-progress', ?, ?, NOW(), ?, ?)
@@ -103,18 +161,12 @@ export async function POST(
            results = VALUES(results),
            current_phase = VALUES(current_phase),
            phase_total = VALUES(phase_total),
+           supplementary_answers = NULL,
+           score = NULL,
+           description = NULL,
+           completed_at = NULL,
            updated_at = NOW()`,
         [userId, questionnaireId, sessionId, serializedResults, currentPhase, phaseTotal]
-      );
-    } else {
-      currentPhase = assessment.assessment_current_phase || results.currentPhase || 1;
-      results.currentPhase = currentPhase;
-      const serializedResults = JSON.stringify(results);
-      await db.query(
-        `UPDATE assessments 
-           SET results = ?, phase_total = ?, current_phase = ?, updated_at = NOW()
-         WHERE id = ?`,
-        [serializedResults, phaseTotal, currentPhase, existingAssessmentId]
       );
     }
 
