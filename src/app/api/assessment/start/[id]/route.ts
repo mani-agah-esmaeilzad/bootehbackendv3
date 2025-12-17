@@ -15,32 +15,41 @@ async function clearPersistedSessionState(sessionId?: string | null, assessmentI
     return;
   }
 
+  const deleteChatMessagesByAssessment = async (targetAssessmentId: number | null | undefined) => {
+    if (!targetAssessmentId) return;
+    try {
+      await db.query('DELETE FROM chat_messages WHERE assessment_id = ?', [targetAssessmentId]);
+    } catch (error) {
+      console.warn(`Failed to delete chat_messages by assessment ${targetAssessmentId}:`, error);
+    }
+  };
+
+  const resolveAssessmentId = async (): Promise<number | null> => {
+    if (assessmentId) return assessmentId;
+    if (!sessionId) return null;
+    try {
+      const [assessmentLookup]: any = await db.query(
+        'SELECT id FROM assessments WHERE session_id = ? LIMIT 1',
+        [sessionId]
+      );
+      if (Array.isArray(assessmentLookup) && assessmentLookup.length > 0) {
+        return Number(assessmentLookup[0].id) || null;
+      }
+    } catch (error) {
+      console.warn(`Failed to resolve assessment_id for session ${sessionId}:`, error);
+    }
+    return null;
+  };
+
   if (sessionId) {
     try {
       await db.query('DELETE FROM assessment_states WHERE session_id = ?', [sessionId]);
     } catch (error) {
       console.warn(`Failed to delete assessment_states for session ${sessionId}:`, error);
-      if (assessmentId) {
-        try {
-          await db.query('DELETE FROM assessment_states WHERE assessment_id = ?', [assessmentId]);
-        } catch (innerError) {
-          console.warn(`Failed to delete assessment_states by assessment ${assessmentId}:`, innerError);
-        }
-      }
     }
 
-    try {
-      await db.query('DELETE FROM chat_messages WHERE session_id = ?', [sessionId]);
-    } catch (error) {
-      console.warn(`Failed to delete chat_messages for session ${sessionId}:`, error);
-      if (assessmentId) {
-        try {
-          await db.query('DELETE FROM chat_messages WHERE assessment_id = ?', [assessmentId]);
-        } catch (innerError) {
-          console.warn(`Failed to delete chat_messages by assessment ${assessmentId}:`, innerError);
-        }
-      }
-    }
+    const resolvedAssessmentId = await resolveAssessmentId();
+    await deleteChatMessagesByAssessment(resolvedAssessmentId);
     return;
   }
 
@@ -50,11 +59,7 @@ async function clearPersistedSessionState(sessionId?: string | null, assessmentI
     } catch (error) {
       console.warn(`Failed to delete assessment_states by assessment ${assessmentId}:`, error);
     }
-    try {
-      await db.query('DELETE FROM chat_messages WHERE assessment_id = ?', [assessmentId]);
-    } catch (error) {
-      console.warn(`Failed to delete chat_messages by assessment ${assessmentId}:`, error);
-    }
+    await deleteChatMessagesByAssessment(assessmentId);
   }
 }
 
