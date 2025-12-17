@@ -111,7 +111,7 @@ const synthesizeWithSpeechEndpoint = async ({
 };
 
 const sendBinaryResponse = (buffer: Buffer, contentType: string) =>
-  new NextResponse(buffer, {
+  new NextResponse(buffer as unknown as BodyInit, {
     status: 200,
     headers: {
       'Content-Type': contentType,
