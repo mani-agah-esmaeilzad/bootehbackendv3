@@ -8,6 +8,7 @@ const AVALAI_TTS_ENDPOINT = 'https://api.avalai.ir/v1/audio/speech';
 const FALLBACK_TTS_MODEL = process.env.AVALAI_TTS_MODEL || 'gemini-2.5-flash-preview-tts';
 const FALLBACK_TTS_VOICE = process.env.AVALAI_TTS_VOICE || 'Kore';
 const FALLBACK_TTS_LANGUAGE = process.env.AVALAI_TTS_LANGUAGE || 'en-US';
+const FALLBACK_TTS_FORMAT = (process.env.AVALAI_TTS_FORMAT || 'wav').toLowerCase();
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +68,7 @@ export async function POST(request: Request) {
         name: FALLBACK_TTS_VOICE,
         languageCode: FALLBACK_TTS_LANGUAGE,
       },
-      response_format: 'mp3',
+      response_format: FALLBACK_TTS_FORMAT,
       instructions: [
         personaName ? `صدای شخصیت "${personaName}" را بازآفرینی کن.` : null,
         'متن را به فارسی معیار بخوان و اگر با محدودیت زبانی روبه‌رو شدی با لهجه دری/افغانی آن را بیان کن.',
@@ -96,11 +97,23 @@ export async function POST(request: Request) {
     }
 
     const audioBuffer = Buffer.from(await avalaiResponse.arrayBuffer());
+    const contentType =
+      FALLBACK_TTS_FORMAT === 'mp3'
+        ? 'audio/mpeg'
+        : FALLBACK_TTS_FORMAT === 'wav'
+          ? 'audio/wav'
+          : FALLBACK_TTS_FORMAT === 'opus'
+            ? 'audio/ogg'
+            : FALLBACK_TTS_FORMAT === 'aac'
+              ? 'audio/aac'
+              : FALLBACK_TTS_FORMAT === 'flac'
+                ? 'audio/flac'
+                : 'audio/pcm';
 
     return new NextResponse(audioBuffer, {
       status: 200,
       headers: {
-        'Content-Type': 'audio/mpeg',
+        'Content-Type': contentType,
         'Content-Length': String(audioBuffer.length),
         'Cache-Control': 'no-store',
       },
