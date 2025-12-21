@@ -20,6 +20,9 @@ export async function GET(req: Request) {
         );
         const hasCustomAssignments = Number(assignmentRows?.[0]?.count || 0) > 0;
         const assignmentFilterClause = hasCustomAssignments ? 'AND uqa.questionnaire_id IS NOT NULL' : '';
+        const activeFilterClause = hasCustomAssignments
+            ? ''
+            : `AND (q.is_active = 1 OR a.status IN ('pending','in-progress'))`;
 
         // *** FINAL FIX: Using correct column names from your schema ***
         const [rows] = await db.query(
@@ -44,6 +47,7 @@ export async function GET(req: Request) {
                 WHERE user_id = ?
              ) as uqa ON q.id = uqa.questionnaire_id
              WHERE q.has_narrator = 0
+             ${activeFilterClause}
              ${assignmentFilterClause}
              ORDER BY 
                 CASE 

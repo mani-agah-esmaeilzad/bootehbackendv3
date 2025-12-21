@@ -110,6 +110,7 @@ export async function createTables() {
         max_questions INT DEFAULT 8,
         display_order INT DEFAULT 0,
         category VARCHAR(100) NOT NULL DEFAULT 'مهارت‌های ارتباطی',
+        is_active BOOLEAN NOT NULL DEFAULT TRUE,
         next_mystery_slug VARCHAR(255) DEFAULT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -120,6 +121,11 @@ export async function createTables() {
     await connection.execute(`
       ALTER TABLE questionnaires
       ADD COLUMN IF NOT EXISTS next_mystery_slug VARCHAR(255) DEFAULT NULL AFTER category
+    `);
+
+    await connection.execute(`
+      ALTER TABLE questionnaires
+      ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE AFTER category
     `);
 
     await connection.execute(`

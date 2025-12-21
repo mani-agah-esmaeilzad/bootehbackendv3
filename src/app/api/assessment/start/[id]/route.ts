@@ -107,6 +107,7 @@ export async function POST(
         q.total_phases,
         q.next_mystery_slug,
         JSON_OBJECT('has_timer', q.has_timer, 'timer_duration', q.timer_duration) as settings,
+        q.is_active,
         a.id as assessment_id,
         a.session_id as assessment_session_id,
         a.status as assessment_status,
@@ -124,6 +125,9 @@ export async function POST(
     }
 
     const assessment = assessmentRows[0];
+    if (!assessment.is_active && totalAssignments === 0 && !assessment.assessment_id) {
+      return NextResponse.json({ success: false, message: 'این پرسشنامه در حال حاضر غیرفعال است' }, { status: 403 });
+    }
     const derivedPhaseTotal = Math.max(getPhaseCount(assessment), 1);
     const storedPhaseTotal = assessment.assessment_phase_total || derivedPhaseTotal;
     const phaseTotal = Math.max(storedPhaseTotal, derivedPhaseTotal);

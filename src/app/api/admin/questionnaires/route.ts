@@ -51,6 +51,7 @@ const createQuestionnaireSchema = z.object({
     phase_two_analysis_prompt: z.string().optional().nullable(),
     phase_two_welcome_message: z.string().optional().nullable(),
     chart_modules: z.array(chartModuleSchema).optional().default([]),
+    is_active: z.boolean().optional().default(true),
 }).superRefine((data, ctx) => {
     if (data.enable_second_phase) {
         if (!data.phase_two_persona_name || data.phase_two_persona_name.trim().length < 2) {
@@ -82,13 +83,19 @@ export async function GET(request: Request) {
                 display_order,
                 has_narrator,
                 category,
+                is_active,
                 next_mystery_slug,
                 chart_modules
              FROM questionnaires 
              ORDER BY display_order ASC, id ASC`
         );
+
+        const questionnaires = (rows as any[]).map((row) => ({
+            ...row,
+            is_active: Boolean(row.is_active),
+        }));
         
-        return NextResponse.json({ success: true, data: rows });
+        return NextResponse.json({ success: true, data: questionnaires });
     } catch (error) {
         console.error("Get Questionnaires Error:", error);
         return NextResponse.json({ success: false, message: 'خطای سرور' }, { status: 500 });
@@ -128,7 +135,8 @@ export async function POST(request: Request) {
             phase_two_persona_prompt,
             phase_two_analysis_prompt,
             phase_two_welcome_message,
-            chart_modules
+            chart_modules,
+            is_active
         } = validation.data;
 
         const [orderResult]: any = await db.query("SELECT MAX(display_order) as max_order FROM questionnaires");
@@ -150,6 +158,7 @@ export async function POST(request: Request) {
                 timer_duration,
                 display_order,
                 category,
+                is_active,
                 next_mystery_slug,
                 total_phases,
                 phase_two_persona_name,
@@ -157,7 +166,7 @@ export async function POST(request: Request) {
                 phase_two_analysis_prompt,
                 phase_two_welcome_message,
                 chart_modules
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 name,
                 description,
@@ -172,6 +181,7 @@ export async function POST(request: Request) {
                 timer_duration ?? null,
                 newOrder,
                 category,
+                is_active ? 1 : 0,
                 next_mystery_slug?.trim() || null,
                 totalPhases,
                 enable_second_phase ? phase_two_persona_name : null,

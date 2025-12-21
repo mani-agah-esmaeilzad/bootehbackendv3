@@ -51,6 +51,7 @@ const questionnaireSchema = z.object({
     phase_two_analysis_prompt: z.string().optional().nullable(),
     phase_two_welcome_message: z.string().optional().nullable(),
     chart_modules: z.array(chartModuleSchema).optional().default([]),
+    is_active: z.boolean().optional().default(true),
 }).superRefine((data, ctx) => {
     if (data.enable_second_phase) {
         if (!data.phase_two_persona_name || data.phase_two_persona_name.trim().length < 2) {
@@ -98,7 +99,8 @@ export async function GET(
                 phase_two_persona_prompt,
                 phase_two_analysis_prompt,
                 phase_two_welcome_message,
-                chart_modules
+                chart_modules,
+                is_active
             FROM questionnaires WHERE id = ?`, 
             [params.id]
         );
@@ -117,6 +119,7 @@ export async function GET(
         } else {
             questionnaire.chart_modules = [];
         }
+        questionnaire.is_active = Boolean(questionnaire.is_active);
         return NextResponse.json({ success: true, data: questionnaire });
 
     } catch (error) {
@@ -192,7 +195,8 @@ export async function PUT(
             phase_two_persona_prompt,
             phase_two_analysis_prompt,
             phase_two_welcome_message,
-            chart_modules
+            chart_modules,
+            is_active
         } = validation.data;
         const { id } = params;
         const totalPhases = enable_second_phase ? 2 : 1;
@@ -218,7 +222,8 @@ export async function PUT(
                 phase_two_persona_prompt = ?,
                 phase_two_analysis_prompt = ?,
                 phase_two_welcome_message = ?,
-                chart_modules = ?
+                chart_modules = ?,
+                is_active = ?
             WHERE id = ?`,
             [
                 name,
@@ -240,6 +245,7 @@ export async function PUT(
                 enable_second_phase ? phase_two_analysis_prompt : null,
                 enable_second_phase ? phase_two_welcome_message : null,
                 JSON.stringify(chart_modules ?? []),
+                is_active ? 1 : 0,
                 id
             ]
         );
