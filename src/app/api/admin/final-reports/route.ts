@@ -96,17 +96,19 @@ export async function GET() {
       });
     }
 
+    const normalizeLastCompletedAt = (value: string | null) => {
+      if (!value) return null;
+      const parsed = new Date(value);
+      return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
+    };
+
     const summaries = Array.from(assignmentsByUser.entries()).flatMap(([userId, userAssignments]) => {
       const userInfo = userMap.get(userId);
       if (!userInfo) return [];
       const parsedCompletions = (completionsByUser.get(userId) ?? []).map((row) => transformCompletionRow(row));
       const aggregated = buildAggregatedFinalReport(userInfo, userAssignments, parsedCompletions);
       if (!aggregated) return [];
-
-      const lastCompletedAt =
-        aggregated.lastCompletedAt instanceof Date
-          ? aggregated.lastCompletedAt.toISOString()
-          : aggregated.lastCompletedAt ?? null;
+      const lastCompletedAt = normalizeLastCompletedAt(aggregated.lastCompletedAt);
 
       return [
         {
@@ -134,9 +136,8 @@ export async function GET() {
 
     const parseTimestamp = (value: string | null) => {
       if (!value) return null;
-      const date = value instanceof Date ? value : new Date(value);
-      const time = date instanceof Date && !Number.isNaN(date.getTime()) ? date.getTime() : null;
-      return time;
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date.getTime();
     };
 
     summaries.sort((a, b) => {
