@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { authenticateToken, extractTokenFromHeader } from '@/lib/auth';
+import { getSession } from '@/lib/auth';
 import { z } from 'zod';
 
 const statusSchema = z.object({
@@ -14,13 +14,8 @@ export async function PUT(
     { params }: { params: { id: string } }
 ) {
     try {
-        const token = extractTokenFromHeader(request.headers.get('Authorization'));
-        if (!token) {
-            return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });
-        }
-
-        const decoded = authenticateToken(token);
-        if (!decoded || decoded.role !== 'admin') {
+        const session = await getSession();
+        if (!session.user || session.user.role !== 'admin') {
             return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز. شما ادمین نیستید.' }, { status: 403 });
         }
 
@@ -50,4 +45,3 @@ export async function PUT(
         return NextResponse.json({ success: false, message: 'خطای سرور' }, { status: 500 });
     }
 }
-
