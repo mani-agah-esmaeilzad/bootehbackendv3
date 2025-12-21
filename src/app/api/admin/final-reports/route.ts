@@ -103,6 +103,11 @@ export async function GET() {
       const aggregated = buildAggregatedFinalReport(userInfo, userAssignments, parsedCompletions);
       if (!aggregated) return [];
 
+      const lastCompletedAt =
+        aggregated.lastCompletedAt instanceof Date
+          ? aggregated.lastCompletedAt.toISOString()
+          : aggregated.lastCompletedAt ?? null;
+
       return [
         {
           userId: userInfo.id,
@@ -115,7 +120,7 @@ export async function GET() {
           completedCount: aggregated.completedCount,
           completionPercent: Math.round(aggregated.completionRate * 100),
           isReady: aggregated.isReady,
-          lastCompletedAt: aggregated.lastCompletedAt,
+          lastCompletedAt,
           overallScore: aggregated.overallNormalized,
           categoryScores: aggregated.categories.map((category) => ({
             label: category.label,
@@ -127,11 +132,20 @@ export async function GET() {
       ];
     });
 
+    const parseTimestamp = (value: string | null) => {
+      if (!value) return null;
+      const date = value instanceof Date ? value : new Date(value);
+      const time = date instanceof Date && !Number.isNaN(date.getTime()) ? date.getTime() : null;
+      return time;
+    };
+
     summaries.sort((a, b) => {
       if (a.isReady !== b.isReady) return a.isReady ? -1 : 1;
       if (b.completionPercent !== a.completionPercent) return b.completionPercent - a.completionPercent;
       if (a.lastCompletedAt && b.lastCompletedAt) {
-        return b.lastCompletedAt.localeCompare(a.lastCompletedAt);
+        const timeA = parseTimestamp(a.lastCompletedAt);
+        const timeB = parseTimestamp(b.lastCompletedAt);
+        if (timeA && timeB) return timeB - timeA;
       }
       if (a.lastCompletedAt) return -1;
       if (b.lastCompletedAt) return 1;
