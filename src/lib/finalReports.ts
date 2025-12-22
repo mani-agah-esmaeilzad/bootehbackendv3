@@ -226,6 +226,7 @@ export interface CompletedAssessmentInfo {
   user_id: number;
   questionnaire_id: number;
   questionnaire_title: string;
+  questionnaire_display_order: number | null;
   category: string | null;
   completed_at: string | null;
   results: any;

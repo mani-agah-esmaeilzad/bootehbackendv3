@@ -44,18 +44,26 @@ export async function GET() {
        ORDER BY uqa.user_id ASC, uqa.display_order ASC, q.display_order ASC, q.id ASC`,
     );
 
-    if (!Array.isArray(assignmentRows) || assignmentRows.length === 0) {
+    const assignmentUserIds = Array.from(new Set(assignmentRows.map((row) => row.user_id)));
+
+    type CompletionUserRow = RowDataPacket & { user_id: number };
+    const [completionUserRows] = await db.query<CompletionUserRow[]>(
+      `SELECT DISTINCT user_id FROM assessments WHERE status = 'completed'`,
+    );
+    const completionUserIds = completionUserRows.map((row) => row.user_id);
+
+    const allUserIdsSet = new Set<number>([...assignmentUserIds, ...completionUserIds]);
+    if (allUserIdsSet.size === 0) {
       return NextResponse.json({ success: true, data: [] });
     }
-
-    const userIds = Array.from(new Set(assignmentRows.map((row) => row.user_id)));
+    const allUserIds = Array.from(allUserIdsSet);
 
     type UserRow = RowDataPacket & UserBasicInfo;
     const [userRows] = await db.query<UserRow[]>(
       `SELECT id, username, first_name, last_name, email, is_active 
        FROM users
-       WHERE id IN (${userIds.map(() => '?').join(',')})`,
-      userIds,
+       WHERE id IN (${allUserIds.map(() => '?').join(',')})`,
+      allUserIds,
     );
 
     const userMap = new Map<number, UserBasicInfo>();
@@ -71,7 +79,7 @@ export async function GET() {
     const completionsByUser = new Map<number, CompletedAssessmentInfo[]>();
 
     // Fetch completed assessments in manageable chunks to avoid parameter limits.
-    const userChunks = chunkArray(userIds, 128);
+    const userChunks = chunkArray(allUserIds, 128);
     for (const chunk of userChunks) {
       type CompletionRow = RowDataPacket & CompletedAssessmentInfo;
       const [completedRows] = await db.query<CompletionRow[]>(
@@ -80,6 +88,7 @@ export async function GET() {
             a.user_id,
             a.questionnaire_id,
             q.name AS questionnaire_title,
+            q.display_order AS questionnaire_display_order,
             q.category,
             a.completed_at,
             a.results,
@@ -96,15 +105,56 @@ export async function GET() {
       });
     }
 
+    const buildFallbackAssignments = (rows: CompletedAssessmentInfo[]): AssignmentInfo[] => {
+      if (!rows || rows.length === 0) return [];
+      const dedupe = new Map<number, AssignmentInfo>();
+      rows
+        .slice()
+        .sort((a, b) => {
+          const orderA = a.questionnaire_display_order ?? 0;
+          const orderB = b.questionnaire_display_order ?? 0;
+          return orderA - orderB;
+        })
+        .forEach((row, index) => {
+          if (dedupe.has(row.questionnaire_id)) return;
+          dedupe.set(row.questionnaire_id, {
+            user_id: row.user_id,
+            questionnaire_id: row.questionnaire_id,
+            questionnaire_title: row.questionnaire_title,
+            display_order:
+              row.questionnaire_display_order !== null
+                ? row.questionnaire_display_order
+                : index,
+            category: row.category,
+            max_score: row.max_score ?? null,
+          });
+        });
+      return Array.from(dedupe.values());
+    };
+
+    const candidateUserIds = Array.from(
+      new Set<number>([
+        ...assignmentsByUser.keys(),
+        ...completionsByUser.keys(),
+      ]),
+    );
+
     const normalizeLastCompletedAt = (value: string | null) => {
       if (!value) return null;
       const parsed = new Date(value);
       return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
     };
 
-    const summaries = Array.from(assignmentsByUser.entries()).flatMap(([userId, userAssignments]) => {
+    const summaries = candidateUserIds.flatMap((userId) => {
       const userInfo = userMap.get(userId);
       if (!userInfo) return [];
+      let userAssignments = assignmentsByUser.get(userId) ?? [];
+      if (userAssignments.length === 0) {
+        const fallback = buildFallbackAssignments(completionsByUser.get(userId) ?? []);
+        if (fallback.length === 0) return [];
+        userAssignments = fallback;
+        assignmentsByUser.set(userId, fallback);
+      }
       const parsedCompletions = (completionsByUser.get(userId) ?? []).map((row) => transformCompletionRow(row));
       const aggregated = buildAggregatedFinalReport(userInfo, userAssignments, parsedCompletions);
       if (!aggregated) return [];
