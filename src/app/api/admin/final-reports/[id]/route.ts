@@ -45,7 +45,7 @@ export async function GET(
     const userInfo = userRows[0];
 
     type AssignmentRow = RowDataPacket & AssignmentInfo;
-    const [assignmentRows] = await db.query<AssignmentRow[]>(
+    const [assignmentRowPackets] = await db.query<AssignmentRow[]>(
       `SELECT 
           uqa.user_id,
           uqa.questionnaire_id,
@@ -59,6 +59,14 @@ export async function GET(
        ORDER BY uqa.display_order ASC, q.display_order ASC, q.id ASC`,
       [userId],
     );
+    const assignmentRows: AssignmentInfo[] = assignmentRowPackets.map((row) => ({
+      user_id: row.user_id,
+      questionnaire_id: row.questionnaire_id,
+      display_order: row.display_order,
+      questionnaire_title: row.questionnaire_title,
+      category: row.category,
+      max_score: row.max_score,
+    }));
 
     type CompletionRow = RowDataPacket & CompletedAssessmentInfo;
     const [completedRows] = await db.query<CompletionRow[]>(
