@@ -60,10 +60,6 @@ export async function GET(
       [userId],
     );
 
-    if (!Array.isArray(assignmentRows) || assignmentRows.length === 0) {
-      return NextResponse.json({ success: false, message: 'هنوز مسیری برای این کاربر تعریف نشده است' }, { status: 404 });
-    }
-
     type CompletionRow = RowDataPacket & CompletedAssessmentInfo;
     const [completedRows] = await db.query<CompletionRow[]>(
       `SELECT 
@@ -71,6 +67,7 @@ export async function GET(
           a.user_id,
           a.questionnaire_id,
           q.name AS questionnaire_title,
+          q.display_order AS questionnaire_display_order,
           q.category,
           a.completed_at,
           a.results,
@@ -82,8 +79,43 @@ export async function GET(
       [userId],
     );
 
+    const buildFallbackAssignments = (rows: CompletedAssessmentInfo[]): AssignmentInfo[] => {
+      if (!rows || rows.length === 0) return [];
+      const dedupe = new Map<number, AssignmentInfo>();
+      rows
+        .slice()
+        .sort((a, b) => {
+          const orderA = a.questionnaire_display_order ?? 0;
+          const orderB = b.questionnaire_display_order ?? 0;
+          return orderA - orderB;
+        })
+        .forEach((row, index) => {
+          if (dedupe.has(row.questionnaire_id)) return;
+          dedupe.set(row.questionnaire_id, {
+            user_id: row.user_id,
+            questionnaire_id: row.questionnaire_id,
+            questionnaire_title: row.questionnaire_title,
+            display_order:
+              row.questionnaire_display_order !== null
+                ? row.questionnaire_display_order
+                : index,
+            category: row.category,
+            max_score: row.max_score ?? null,
+          });
+        });
+      return Array.from(dedupe.values());
+    };
+
+    let effectiveAssignments = assignmentRows;
+    if (!effectiveAssignments || effectiveAssignments.length === 0) {
+      effectiveAssignments = buildFallbackAssignments(completedRows);
+      if (effectiveAssignments.length === 0) {
+        return NextResponse.json({ success: false, message: 'هنوز مسیری برای این کاربر تعریف نشده است' }, { status: 404 });
+      }
+    }
+
     const parsedCompletions = completedRows.map((row) => transformCompletionRow(row));
-    const aggregated = buildAggregatedFinalReport(userInfo, assignmentRows, parsedCompletions);
+    const aggregated = buildAggregatedFinalReport(userInfo, effectiveAssignments, parsedCompletions);
 
     if (!aggregated) {
       return NextResponse.json({ success: false, message: 'داده‌ای برای این کاربر ثبت نشده است' }, { status: 404 });
