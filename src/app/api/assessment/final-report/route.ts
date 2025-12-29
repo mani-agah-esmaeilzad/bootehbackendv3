@@ -38,20 +38,27 @@ export async function GET() {
     const userInfo = userRows[0];
 
     type AssignmentRow = RowDataPacket & AssignmentInfo;
-    const [assignmentRowPackets] = await db.query<AssignmentRow[]>(
-      `SELECT 
-          uqa.user_id,
-          uqa.questionnaire_id,
-          uqa.display_order,
-          q.name AS questionnaire_title,
-          q.category,
-          NULL AS max_score
-       FROM user_questionnaire_assignments uqa
-       JOIN questionnaires q ON q.id = uqa.questionnaire_id
-       WHERE uqa.user_id = ?
-       ORDER BY uqa.display_order ASC, q.display_order ASC, q.id ASC`,
-      [userId],
-    );
+    let assignmentRowPackets: AssignmentRow[] = [];
+    try {
+      const [rows] = await db.query<AssignmentRow[]>(
+        `SELECT 
+            uqa.user_id,
+            uqa.questionnaire_id,
+            uqa.display_order,
+            q.name AS questionnaire_title,
+            q.category,
+            NULL AS max_score
+         FROM user_questionnaire_assignments uqa
+         JOIN questionnaires q ON q.id = uqa.questionnaire_id
+         WHERE uqa.user_id = ?
+         ORDER BY uqa.display_order ASC, q.display_order ASC, q.id ASC`,
+        [userId],
+      );
+      assignmentRowPackets = rows;
+    } catch (assignmentError) {
+      console.error("Final report: failed to load user assignments, falling back to completions.", assignmentError);
+      assignmentRowPackets = [];
+    }
 
     const assignmentRows: AssignmentInfo[] = assignmentRowPackets.map((row) => ({
       user_id: row.user_id,
