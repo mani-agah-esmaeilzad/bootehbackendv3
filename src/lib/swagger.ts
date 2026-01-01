@@ -8,6 +8,38 @@ const methodLabels: Record<HttpMethod, { summary: string; description: string }>
   PATCH: { summary: 'Patch', description: 'partially updating' },
 };
 
+
+const methodsRequiringBody: HttpMethod[] = ['POST', 'PUT', 'PATCH'];
+
+const buildJsonRequestBody = (
+  schema: Record<string, unknown>,
+  example?: Record<string, unknown>,
+  required = true,
+) => ({
+  required,
+  content: {
+    'application/json': {
+      schema,
+      example,
+    },
+  },
+});
+
+const defaultRequestBody = buildJsonRequestBody({
+  type: 'object',
+  description: 'Generic JSON payload; inspect the endpoint implementation for exact fields.',
+  additionalProperties: true,
+});
+
+const buildMultipartRequestBody = (schema: Record<string, unknown>, required = true) => ({
+  required,
+  content: {
+    'multipart/form-data': {
+      schema,
+    },
+  },
+});
+
 const pathMethods = {
   '/': ['POST'],
   '/admin/assessment/preview-chat': ['POST'],
@@ -120,7 +152,7 @@ const tagDescriptions: Record<string, string> = {
 type OperationOverride = {
   summary?: string;
   description?: string;
-  requestBody?: Record<string, unknown>;
+  requestBody?: Record<string, unknown> | null;
 };
 
 const operationOverrides: Partial<Record<string, Partial<Record<HttpMethod, OperationOverride>>>> = {
@@ -134,18 +166,52 @@ const operationOverrides: Partial<Record<string, Partial<Record<HttpMethod, Oper
     POST: {
       summary: 'Admin login',
       description: 'Validates administrator credentials and issues an auth cookie for the dashboard.',
+      requestBody: buildJsonRequestBody(
+        {
+          type: 'object',
+          required: ['username', 'password'],
+          properties: {
+            username: { type: 'string' },
+            password: { type: 'string', format: 'password' },
+          },
+          additionalProperties: false,
+        },
+        { username: 'admin', password: 'P@ssw0rd!' },
+      ),
     },
   },
   '/admin/users/bulk-upload': {
     POST: {
       summary: 'Bulk import users',
       description: 'Accepts CSV uploads containing user data for batch creation.',
+      requestBody: buildMultipartRequestBody({
+        type: 'object',
+        required: ['file'],
+        properties: {
+          file: {
+            type: 'string',
+            format: 'binary',
+            description: 'XLSX or CSV file with user information columns.',
+          },
+        },
+      }),
     },
   },
   '/admin/mystery/images/upload': {
     POST: {
       summary: 'Upload mystery assets',
       description: 'Uploads background images that are used inside the mystery storyline.',
+      requestBody: buildMultipartRequestBody({
+        type: 'object',
+        required: ['file'],
+        properties: {
+          file: {
+            type: 'string',
+            format: 'binary',
+            description: 'Image file (JPEG, PNG, WEBP up to 5MB).',
+          },
+        },
+      }),
     },
   },
   '/admin/mystery/images/generate-text': {
@@ -154,22 +220,96 @@ const operationOverrides: Partial<Record<string, Partial<Record<HttpMethod, Oper
       description: 'Calls the AI helper that generates descriptive text for mystery scenes.',
     },
   },
+  '/admin/blog/images/upload': {
+    POST: {
+      summary: 'Upload blog assets',
+      description: 'Uploads blog images that can be associated with posts.',
+      requestBody: buildMultipartRequestBody({
+        type: 'object',
+        required: ['file'],
+        properties: {
+          file: {
+            type: 'string',
+            format: 'binary',
+            description: 'Image file (JPEG, PNG, WEBP up to 5MB).',
+          },
+        },
+      }),
+    },
+  },
   '/auth/login': {
     POST: {
       summary: 'User login',
       description: 'Authenticates public users and initializes their application session.',
+      requestBody: buildJsonRequestBody(
+        {
+          type: 'object',
+          required: ['email', 'password'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+            password: { type: 'string', format: 'password' },
+          },
+          additionalProperties: false,
+        },
+        { email: 'user@example.com', password: 'P@ssw0rd!' },
+      ),
     },
   },
   '/auth/register': {
     POST: {
       summary: 'User registration',
       description: 'Creates a new user account based on the submitted profile.',
+      requestBody: buildJsonRequestBody(
+        {
+          type: 'object',
+          required: ['email', 'password', 'firstName', 'lastName'],
+          properties: {
+            email: { type: 'string', format: 'email' },
+            password: { type: 'string', minLength: 6 },
+            firstName: { type: 'string' },
+            lastName: { type: 'string' },
+            phoneNumber: { type: 'string', nullable: true },
+            age: { type: 'integer', nullable: true },
+            educationLevel: { type: 'string', nullable: true },
+            workExperience: { type: 'string', nullable: true },
+            gender: { type: 'string', nullable: true },
+          },
+          additionalProperties: false,
+        },
+        {
+          email: 'user@example.com',
+          password: 'StrongPass123',
+          firstName: 'Ali',
+          lastName: 'Rezaei',
+        },
+      ),
     },
   },
   '/auth/logout': {
     POST: {
       summary: 'User logout',
       description: 'Invalidates the active user session by clearing cookies.',
+    },
+  },
+  '/org/{slug}/login': {
+    POST: {
+      summary: 'Organization login',
+      description: 'Logs an end-user into their organization portal using username/email and password.',
+      requestBody: buildJsonRequestBody(
+        {
+          type: 'object',
+          required: ['username', 'password'],
+          properties: {
+            username: {
+              type: 'string',
+              description: 'Accepts either username or email.',
+            },
+            password: { type: 'string', format: 'password' },
+          },
+          additionalProperties: false,
+        },
+        { username: 'user@example.com', password: 'Secret123' },
+      ),
     },
   },
   '/database/rebuild': {
@@ -182,6 +322,7 @@ const operationOverrides: Partial<Record<string, Partial<Record<HttpMethod, Oper
     GET: {
       summary: 'Serve blog upload',
       description: 'Streams static blog assets from the uploads directory based on the provided slug path.',
+      requestBody: null,
     },
   },
 };
@@ -244,13 +385,18 @@ const buildOperation = (method: HttpMethod, path: string, override?: OperationOv
   const verb = methodLabels[method];
   const readable = buildReadablePath(path);
   const parameters = collectPathParameters(path);
+  const requestBody =
+    override?.requestBody === null
+      ? undefined
+      : override?.requestBody ??
+        (methodsRequiringBody.includes(method) ? defaultRequestBody : undefined);
   return {
     tags: [getTag(path)],
     summary: override?.summary ?? `${verb.summary} ${readable}`,
     description:
       override?.description ?? `Handles ${verb.description} requests for ${readable} (${path}).`,
     parameters: parameters.length ? parameters : undefined,
-    requestBody: override?.requestBody,
+    requestBody,
     responses: defaultResponses,
   };
 };
