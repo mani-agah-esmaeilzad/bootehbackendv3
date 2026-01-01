@@ -11,12 +11,6 @@ export async function POST(req: NextRequest) {
         return guard.response;
     }
 
-  // تصحیح شد: روش صحیح اعتبارسنجی ادمین
-  const guard = await requireAdmin(req);
-  if (!guard.ok) {
-    return guard.response;
-  }
-
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File;

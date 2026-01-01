@@ -11,11 +11,6 @@ export async function POST(req: NextRequest) {
         return guard.response;
     }
 
-    const guard = await requireAdmin(req);
-    if (!guard.ok) {
-        return guard.response;
-    }
-
     try {
         const { userIds } = await req.json();
 

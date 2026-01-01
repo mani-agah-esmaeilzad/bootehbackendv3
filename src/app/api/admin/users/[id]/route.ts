@@ -15,11 +15,6 @@ export async function GET(req: NextRequest, { params }: Params) {
         return guard.response;
     }
 
-    const guard = await requireAdmin(req);
-    if (!guard.ok) {
-        return guard.response;
-    }
-
     try {
         const userId = parseInt(params.id, 10);
         if (isNaN(userId)) {
@@ -43,11 +38,6 @@ export async function GET(req: NextRequest, { params }: Params) {
 
 // تابع DELETE برای حذف یک کاربر (بدون تغییر)
 export async function DELETE(req: NextRequest, { params }: Params) {
-    const guard = await requireAdmin(req);
-    if (!guard.ok) {
-        return guard.response;
-    }
-
     const guard = await requireAdmin(req);
     if (!guard.ok) {
         return guard.response;

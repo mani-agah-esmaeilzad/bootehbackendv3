@@ -15,11 +15,6 @@ export async function GET(req: NextRequest, { params }: Params) {
         return guard.response;
     }
 
-    const guard = await requireAdmin(req);
-    if (!guard.ok) {
-        return guard.response;
-    }
-
     try {
         const userId = parseInt(params.userId, 10);
         if (isNaN(userId)) {
