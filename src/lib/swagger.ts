@@ -432,12 +432,6 @@ export const swaggerDocument = {
     description:
       'Reference documentation for the Booteh Next.js backend. Each path is relative to the /api base path.',
   },
-  servers: [
-    {
-      url: '/api',
-      description: 'Next.js API base path',
-    },
-  ],
   tags: deriveTags(),
   paths: buildPathsObject(),
 } as const;
