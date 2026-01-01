@@ -2,9 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
 import { RowDataPacket } from 'mysql2';
 import {
+import { requireAdmin } from '@/lib/auth/guards';
   AssignmentInfo,
   CompletedAssessmentInfo,
   UserBasicInfo,
@@ -18,13 +18,13 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } },
 ) {
-  try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
     }
 
-    const userId = Number(params.id);
+  try {
+const userId = Number(params.id);
     if (!Number.isInteger(userId) || userId <= 0) {
       return NextResponse.json({ success: false, message: 'شناسه کاربر نامعتبر است' }, { status: 400 });
     }

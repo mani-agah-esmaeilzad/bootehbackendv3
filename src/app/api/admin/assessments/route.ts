@@ -1,9 +1,15 @@
 // فایل کامل: src/app/api/admin/assessments/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import pool from '@/lib/database';
+import { requireAdmin } from '@/lib/auth/guards';
 
 // DELETE: حذف تمام رکوردهای ارزیابی‌ها و پیام‌های چت
 export async function DELETE(request: NextRequest) {
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
     // اینجا هم در یک پروژه واقعی باید احراز هویت ادمین چک شود
     try {
         const connection = await pool.getConnection();

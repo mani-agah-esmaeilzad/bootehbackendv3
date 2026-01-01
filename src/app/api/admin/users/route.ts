@@ -2,16 +2,16 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database'; // Corrected import
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export async function GET(request: Request) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        // Corrected to use the imported 'db' object
+    try {
+// Corrected to use the imported 'db' object
         try {
             const [rows] = await db.query(
                 `SELECT id, username, email, first_name, last_name, is_active, created_at 

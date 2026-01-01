@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { RowDataPacket } from 'mysql2';
 import { z } from 'zod';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 const assignmentSchema = z.object({
   questionnaireIds: z.array(z.number().int().positive()).default([]),
@@ -14,13 +14,13 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
     }
 
-    const userId = parseInt(params.id, 10);
+  try {
+const userId = parseInt(params.id, 10);
     if (Number.isNaN(userId)) {
       return NextResponse.json({ success: false, message: 'شناسه کاربر نامعتبر است' }, { status: 400 });
     }
@@ -75,13 +75,13 @@ export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
     }
 
-    const userId = parseInt(params.id, 10);
+  try {
+const userId = parseInt(params.id, 10);
     if (Number.isNaN(userId)) {
       return NextResponse.json({ success: false, message: 'شناسه کاربر نامعتبر است' }, { status: 400 });
     }

@@ -2,18 +2,18 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        // *** FINAL FIX: The query now filters for 'completed' status only and uses correct column names ***
+    try {
+// *** FINAL FIX: The query now filters for 'completed' status only and uses correct column names ***
         const [rows]: any = await db.query(
             `SELECT 
                 a.id as assessment_id,

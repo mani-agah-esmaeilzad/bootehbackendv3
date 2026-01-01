@@ -1,15 +1,20 @@
 // src/app/api/admin/users/bulk-upload/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdmin } from '@/lib/auth'; // تصحیح شد: استفاده از verifyAdmin
 import pool from '@/lib/database'; // تصحیح شد: import کردن pool به عنوان default
 import bcrypt from 'bcryptjs';
 import * as xlsx from 'xlsx';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export async function POST(req: NextRequest) {
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
   // تصحیح شد: روش صحیح اعتبارسنجی ادمین
-  const { admin, error: adminError } = await verifyAdmin(req);
-  if (adminError) {
-    return NextResponse.json({ message: adminError }, { status: 401 });
+  const guard = await requireAdmin(req);
+  if (!guard.ok) {
+    return guard.response;
   }
 
   try {

@@ -1,6 +1,6 @@
 // src/app/api/admin/organizations/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdmin } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 import pool from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
 
@@ -10,9 +10,9 @@ interface Params {
 
 // تابع GET: برای دریافت جزئیات یک سازمان خاص
 export async function GET(req: NextRequest, { params }: Params) {
-    const { admin, error } = await verifyAdmin(req);
-    if (error) {
-        return NextResponse.json({ success: false, message: error }, { status: 401 });
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
     }
 
     try {
@@ -40,9 +40,9 @@ export async function GET(req: NextRequest, { params }: Params) {
 
 // تابع PUT: برای ویرایش یک سازمان
 export async function PUT(req: NextRequest, { params }: Params) {
-    const { admin, error } = await verifyAdmin(req);
-    if (error) {
-        return NextResponse.json({ success: false, message: error }, { status: 401 });
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
     }
 
     try {
@@ -92,9 +92,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
 
 // تابع DELETE: برای حذف یک سازمان
 export async function DELETE(req: NextRequest, { params }: Params) {
-    const { admin, error } = await verifyAdmin(req);
-    if (error) {
-        return NextResponse.json({ success: false, message: error }, { status: 401 });
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
     }
 
     try {

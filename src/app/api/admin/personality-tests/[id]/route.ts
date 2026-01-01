@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,9 +35,9 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const [rows]: any = await db.query(
@@ -70,9 +70,9 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const body = await request.json();
@@ -109,9 +109,9 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const [result]: any = await db.query(

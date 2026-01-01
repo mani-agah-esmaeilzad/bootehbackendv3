@@ -5,6 +5,7 @@ import { authenticateToken, extractTokenFromHeader } from '@/lib/auth';
 import { generateResponse } from '@/lib/ai';
 import db from '@/lib/database';
 import type { ChatMessage } from '@/lib/ai';
+import { requireAdmin } from '@/lib/auth/guards';
 
 interface PreviewChatRequest {
     message: string;
@@ -13,6 +14,11 @@ interface PreviewChatRequest {
 }
 
 export async function POST(request: Request) {
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
     try {
         const token = extractTokenFromHeader(request.headers.get('Authorization'));
         if (!token) {

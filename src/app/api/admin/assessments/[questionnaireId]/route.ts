@@ -4,11 +4,17 @@ import { extractTokenFromHeader, authenticateToken } from '@/lib/auth';
 import { getConnectionWithRetry } from '@/lib/database';
 import { v4 as uuidv4 } from 'uuid'; // <--- وارد کردن کتابخانه uuid
 import { buildUserPromptTokens, applyUserPromptPlaceholders } from '@/lib/promptPlaceholders';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { questionnaireId: string } }
 ) {
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
   try {
     // Authentication
     const authHeader = request.headers.get('authorization');

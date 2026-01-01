@@ -2,8 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { getSession } from '@/lib/auth';
 import { generateMysteryBubbleText } from '@/lib/ai';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,19 +18,13 @@ const requestSchema = z.object({
   bubble_prompt: z.string().optional(),
 });
 
-const ensureAdmin = async () => {
-  const session = await getSession();
-  if (!session.user || session.user.role !== 'admin') {
-    return { errorResponse: NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 }) };
-  }
-  return { session };
-};
-
 export async function POST(request: Request) {
-  try {
-    const { errorResponse } = await ensureAdmin();
-    if (errorResponse) return errorResponse;
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
+  try {
     const body = await request.json().catch(() => null);
     if (!body) {
       return NextResponse.json({ success: false, message: 'بدنه درخواست نامعتبر است.' }, { status: 400 });

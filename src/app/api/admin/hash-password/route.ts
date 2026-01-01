@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { hashPassword } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export async function GET(request: NextRequest) {
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
   try {
     const { searchParams } = new URL(request.url);
     const password = searchParams.get('password');

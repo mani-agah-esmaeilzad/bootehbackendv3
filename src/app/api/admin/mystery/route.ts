@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import db, { getConnectionWithRetry } from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,19 +54,12 @@ const assessmentSchema = z.object({
   images: z.array(imageSchema).min(1, { message: 'حداقل یک تصویر باید ثبت شود.' }),
 });
 
-const ensureAdmin = async () => {
-  const session = await getSession();
-  if (!session.user || session.user.role !== 'admin') {
-    return { errorResponse: NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 }) };
+export async function GET(request: Request) {
+  const guard = await requireAdmin(request);
+  if (!guard.ok) {
+    return guard.response;
   }
-  return { session };
-};
-
-export async function GET() {
   try {
-    const { errorResponse } = await ensureAdmin();
-    if (errorResponse) return errorResponse;
-
     const [tests]: any = await db.query(
       `
         SELECT id, name, slug, short_description, intro_message, guide_name, system_prompt, analysis_prompt, bubble_prompt, is_active, created_at, updated_at
@@ -112,11 +105,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireAdmin(request);
+  if (!guard.ok) {
+    return guard.response;
+  }
+
   let connection: any;
   try {
-    const { errorResponse } = await ensureAdmin();
-    if (errorResponse) return errorResponse;
-
     const body = await request.json();
     const validation = assessmentSchema.safeParse(body);
     if (!validation.success) {

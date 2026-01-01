@@ -2,9 +2,9 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
 import { z } from 'zod';
 import { QUESTIONNAIRE_CATEGORIES } from '@/constants/questionnaireCategories';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,13 +71,13 @@ export async function GET(
     request: Request,
     { params }: { params: { id: string } }
 ) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        // *** FINAL FIX: Selecting 'name' and aliasing to 'title' for frontend compatibility ***
+    try {
+// *** FINAL FIX: Selecting 'name' and aliasing to 'title' for frontend compatibility ***
         const [rows] = await db.query(
             `SELECT 
                 id, 
@@ -133,13 +133,13 @@ export async function DELETE(
     request: Request,
     { params }: { params: { id: string } }
 ) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        const { id } = params;
+    try {
+const { id } = params;
         const [result]: any = await db.query("DELETE FROM questionnaires WHERE id = ?", [id]);
 
         if (result.affectedRows === 0) {
@@ -158,13 +158,13 @@ export async function PUT(
     request: Request,
     { params }: { params: { id: string } }
 ) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        const body = await request.json();
+    try {
+const body = await request.json();
         // The frontend sends 'title', so we need to rename it to 'name' for validation
         if (body.title) {
             body.name = body.title;

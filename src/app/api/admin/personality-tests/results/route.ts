@@ -1,16 +1,16 @@
 // src/app/api/admin/personality-tests/results/route.ts
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const session = await getSession();
-    if (!session?.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const [rows]: any = await db.query(

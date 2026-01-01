@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { authenticateToken, extractTokenFromHeader } from '@/lib/auth';
 import { z } from 'zod';
+import { requireAdmin } from '@/lib/auth/guards';
 
 const statusUpdateSchema = z.object({
     is_active: z.boolean(),
@@ -13,6 +14,11 @@ export async function PUT(
     request: Request,
     { params }: { params: { id: string } }
 ) {
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
     try {
         const token = extractTokenFromHeader(request.headers.get('Authorization'));
         if (!token) {

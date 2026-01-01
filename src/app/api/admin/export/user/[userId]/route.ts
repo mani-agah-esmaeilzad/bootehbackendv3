@@ -1,18 +1,23 @@
 // src/app/api/admin/export/user/[userId]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdmin } from '@/lib/auth';
 import pool from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
 import * as xlsx from 'xlsx';
+import { requireAdmin } from '@/lib/auth/guards';
 
 interface Params {
     params: { userId: string };
 }
 
 export async function GET(req: NextRequest, { params }: Params) {
-    const { admin, error } = await verifyAdmin(req);
-    if (error) {
-        return NextResponse.json({ success: false, message: error }, { status: 401 });
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
     }
 
     try {

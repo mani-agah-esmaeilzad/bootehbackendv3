@@ -4,11 +4,17 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { authenticateToken, extractTokenFromHeader } from '@/lib/auth';
 import { getInitialAssessmentPrompt } from '@/lib/ai';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export async function GET(
     request: Request,
     { params }: { params: { id: string } }
 ) {
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
     try {
         const token = extractTokenFromHeader(request.headers.get('Authorization'));
         if (!token) return NextResponse.json({ success: false, message: 'توکن ارائه نشده است' }, { status: 401 });

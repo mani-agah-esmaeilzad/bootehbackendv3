@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,11 +46,11 @@ const blogPostSchema = z.object({
   is_published: z.boolean().optional().default(true),
 });
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const [rows]: any = await db.query(
@@ -69,12 +69,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const guard = await requireAdmin(request);
+  if (!guard.ok) {
+    return guard.response;
+  }
   try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-    }
-
     const body = await request.json();
     const validation = blogPostSchema.safeParse(body);
 

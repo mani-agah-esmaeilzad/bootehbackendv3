@@ -1,14 +1,14 @@
 // src/app/api/admin/organizations/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdmin } from '@/lib/auth';
 import pool from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
+import { requireAdmin } from '@/lib/auth/guards';
 
 // تابع GET: برای دریافت لیست تمام سازمان‌ها
 export async function GET(req: NextRequest) {
-    const { admin, error } = await verifyAdmin(req);
-    if (error) {
-        return NextResponse.json({ success: false, message: error }, { status: 401 });
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
     }
 
     try {
@@ -28,9 +28,9 @@ export async function GET(req: NextRequest) {
 
 // تابع POST: برای ایجاد یک سازمان جدید
 export async function POST(req: NextRequest) {
-    const { admin, error } = await verifyAdmin(req);
-    if (error) {
-        return NextResponse.json({ success: false, message: error }, { status: 401 });
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
     }
 
     try {

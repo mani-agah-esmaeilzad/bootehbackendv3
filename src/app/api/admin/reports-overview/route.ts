@@ -2,17 +2,17 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
 type StatusRow = { status: string; total: number };
 
-export async function GET() {
+export async function GET(request: Request) {
     try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+        const guard = await requireAdmin(request);
+        if (!guard.ok) {
+            return guard.response;
         }
 
         const [totalsRows]: any = await db.query(

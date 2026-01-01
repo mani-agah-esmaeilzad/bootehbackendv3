@@ -2,7 +2,7 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,13 +10,13 @@ export async function GET(
     request: Request,
     { params }: { params: { id: string } }
 ) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        const assessmentId = parseInt(params.id, 10);
+    try {
+const assessmentId = parseInt(params.id, 10);
         if (isNaN(assessmentId)) {
             return NextResponse.json({ success: false, message: 'ID گزارش نامعتبر است' }, { status: 400 });
         }
@@ -82,13 +82,13 @@ export async function DELETE(
     request: Request,
     { params }: { params: { id: string } }
 ) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        const assessmentId = parseInt(params.id, 10);
+    try {
+const assessmentId = parseInt(params.id, 10);
         if (Number.isNaN(assessmentId)) {
             return NextResponse.json({ success: false, message: 'ID گزارش نامعتبر است' }, { status: 400 });
         }

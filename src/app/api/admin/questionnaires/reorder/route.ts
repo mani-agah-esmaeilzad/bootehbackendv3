@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { authenticateToken, extractTokenFromHeader } from '@/lib/auth';
 import { z } from 'zod';
+import { requireAdmin } from '@/lib/auth/guards';
 
 const reorderSchema = z.array(z.object({
     id: z.number(),
@@ -11,6 +12,11 @@ const reorderSchema = z.array(z.object({
 }));
 
 export async function POST(request: Request) {
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
     try {
         const token = extractTokenFromHeader(request.headers.get('Authorization'));
         if (!token) {

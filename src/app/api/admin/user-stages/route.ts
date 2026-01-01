@@ -3,16 +3,16 @@
 import { NextResponse } from 'next/server';
 import { RowDataPacket } from 'mysql2';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export async function GET(request: Request) {
-  try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
     }
 
-    const [rows] = await db.query<RowDataPacket[]>(
+  try {
+const [rows] = await db.query<RowDataPacket[]>(
       `SELECT 
          u.id,
          u.username,

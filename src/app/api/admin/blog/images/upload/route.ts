@@ -1,10 +1,10 @@
 // src/app/api/admin/blog/images/upload/route.ts
 
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
 import { mkdir, writeFile } from 'fs/promises';
 import path from 'path';
 import { randomBytes } from 'crypto';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,13 +12,13 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 export async function POST(request: Request) {
-  try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
     }
 
-    const formData = await request.formData();
+  try {
+const formData = await request.formData();
     const file = formData.get('file');
 
     if (!file || typeof file === 'string') {

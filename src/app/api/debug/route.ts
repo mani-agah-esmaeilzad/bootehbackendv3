@@ -1,6 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireAdmin } from '@/lib/auth/guards';
 
-export async function GET() {
+const handleEnvRestriction = async (request: NextRequest) => {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'NOT_FOUND' }, { status: 404 });
+  }
+  const guard = await requireAdmin(request);
+  if (!guard.ok) {
+    return guard.response;
+  }
+  return null;
+};
+
+export async function GET(request: NextRequest) {
+  const blocked = await handleEnvRestriction(request);
+  if (blocked) {
+    return blocked;
+  }
   return NextResponse.json({
     message: 'Debug API is working',
     timestamp: new Date().toISOString(),
@@ -9,6 +25,10 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const blocked = await handleEnvRestriction(request);
+  if (blocked) {
+    return blocked;
+  }
   try {
     const body = await request.json();
     return NextResponse.json({

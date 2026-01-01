@@ -3,9 +3,9 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
 import { z } from 'zod';
 import { QUESTIONNAIRE_CATEGORIES } from '@/constants/questionnaireCategories';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,13 +68,13 @@ const createQuestionnaireSchema = z.object({
 
 // GET Handler - To fetch all questionnaires
 export async function GET(request: Request) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        // *** FINAL FIX: Using correct column 'name' and aliasing it to 'title' for frontend compatibility ***
+    try {
+// *** FINAL FIX: Using correct column 'name' and aliasing it to 'title' for frontend compatibility ***
         const [rows] = await db.query(
             `SELECT 
                 id, 
@@ -104,13 +104,13 @@ export async function GET(request: Request) {
 
 // POST Handler - To create a new questionnaire
 export async function POST(request: Request) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        const body = await request.json();
+    try {
+const body = await request.json();
         const validation = createQuestionnaireSchema.safeParse(body);
         if (!validation.success) {
             return NextResponse.json({ success: false, message: validation.error.errors[0].message }, { status: 400 });

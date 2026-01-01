@@ -2,8 +2,8 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
 import { z } from 'zod';
+import { requireAdmin } from '@/lib/auth/guards';
 
 const statusSchema = z.object({
     is_active: z.boolean(),
@@ -13,13 +13,13 @@ export async function PUT(
     request: Request,
     { params }: { params: { id: string } }
 ) {
-    try {
-        const session = await getSession();
-        if (!session.user || session.user.role !== 'admin') {
-            return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز. شما ادمین نیستید.' }, { status: 403 });
-        }
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
-        const body = await request.json();
+    try {
+const body = await request.json();
         const validation = statusSchema.safeParse(body);
         if (!validation.success) {
             return NextResponse.json({ success: false, message: validation.error.errors[0].message }, { status: 400 });

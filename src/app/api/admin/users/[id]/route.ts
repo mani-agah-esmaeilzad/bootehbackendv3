@@ -1,8 +1,8 @@
 // src/app/api/admin/users/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyAdmin } from '@/lib/auth';
 import pool from '@/lib/database';
 import { RowDataPacket } from 'mysql2';
+import { requireAdmin } from '@/lib/auth/guards';
 
 interface Params {
     params: { id: string };
@@ -10,9 +10,14 @@ interface Params {
 
 // ✅ تابع GET جدید برای دریافت اطلاعات یک کاربر
 export async function GET(req: NextRequest, { params }: Params) {
-    const { admin, error } = await verifyAdmin(req);
-    if (error) {
-        return NextResponse.json({ success: false, message: error }, { status: 401 });
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
     }
 
     try {
@@ -38,9 +43,14 @@ export async function GET(req: NextRequest, { params }: Params) {
 
 // تابع DELETE برای حذف یک کاربر (بدون تغییر)
 export async function DELETE(req: NextRequest, { params }: Params) {
-    const { admin, error } = await verifyAdmin(req);
-    if (error) {
-        return NextResponse.json({ success: false, message: error }, { status: 401 });
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
+    const guard = await requireAdmin(req);
+    if (!guard.ok) {
+        return guard.response;
     }
 
     try {

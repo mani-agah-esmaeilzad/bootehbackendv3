@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import db, { getConnectionWithRetry } from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -55,23 +55,17 @@ const assessmentSchema = z.object({
   images: z.array(imageSchema).min(1, { message: 'حداقل یک تصویر باید ثبت شود.' }),
 });
 
-const ensureAdmin = async () => {
-  const session = await getSession();
-  if (!session.user || session.user.role !== 'admin') {
-    return { errorResponse: NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 }) };
-  }
-  return { session };
-};
-
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
+
   let connection: any;
   try {
-    const { errorResponse } = await ensureAdmin();
-    if (errorResponse) return errorResponse;
-
     const assessmentId = Number(params.id);
     if (!assessmentId) {
       return NextResponse.json({ success: false, message: 'شناسه آزمون نامعتبر است.' }, { status: 400 });
@@ -167,10 +161,12 @@ export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  try {
-    const { errorResponse } = await ensureAdmin();
-    if (errorResponse) return errorResponse;
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
+    }
 
+  try {
     const assessmentId = Number(params.id);
     if (!assessmentId) {
       return NextResponse.json({ success: false, message: 'شناسه آزمون نامعتبر است.' }, { status: 400 });

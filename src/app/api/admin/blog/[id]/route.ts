@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth/guards';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,13 +70,13 @@ export async function PUT(
   request: Request,
   context: { params: { id: string } }
 ) {
-  try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+    const guard = await requireAdmin(request);
+    if (!guard.ok) {
+        return guard.response;
     }
 
-    const id = Number(context.params.id);
+  try {
+const id = Number(context.params.id);
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ success: false, message: 'شناسه مقاله معتبر نیست.' }, { status: 400 });
     }
@@ -157,13 +157,13 @@ export async function DELETE(
   _request: Request,
   context: { params: { id: string } }
 ) {
-  try {
-    const session = await getSession();
-    if (!session.user || session.user.role !== 'admin') {
-      return NextResponse.json({ success: false, message: 'دسترسی غیر مجاز' }, { status: 403 });
+    const guard = await requireAdmin(_request);
+    if (!guard.ok) {
+        return guard.response;
     }
 
-    const id = Number(context.params.id);
+  try {
+const id = Number(context.params.id);
     if (!Number.isInteger(id) || id <= 0) {
       return NextResponse.json({ success: false, message: 'شناسه مقاله معتبر نیست.' }, { status: 400 });
     }
