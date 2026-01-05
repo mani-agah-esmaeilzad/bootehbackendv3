@@ -112,6 +112,7 @@ const pathMethods = {
   '/personality/results': ['GET'],
   '/personality/results/{sessionId}': ['GET'],
   '/personality/start/{slug}': ['POST'],
+  '/profile': ['GET'],
   '/test': ['GET'],
   '/test-db': ['GET'],
   '/uploads/blog/{slug}': ['GET'],
@@ -289,6 +290,14 @@ const operationOverrides: Partial<Record<string, Partial<Record<HttpMethod, Oper
     POST: {
       summary: 'User logout',
       description: 'Invalidates the active user session by clearing cookies.',
+    },
+  },
+  '/profile': {
+    GET: {
+      summary: 'Get current user profile',
+      description:
+        'Returns the authenticated user’s profile information, including contact data and metadata flags.',
+      requestBody: null,
     },
   },
   '/org/{slug}/login': {
