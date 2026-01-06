@@ -55,18 +55,27 @@ export async function POST(req: Request) {
             maxAge: 60 * 60 * 24 * 7,
         });
 
+        const userProfile = {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            phoneNumber: user.phone_number ?? null,
+            age: user.age ?? null,
+            educationLevel: user.education_level ?? null,
+            workExperience: user.work_experience ?? null,
+            gender: user.gender ?? null,
+            role: user.role,
+            isActive: Boolean(user.is_active),
+            createdAt: user.created_at ? new Date(user.created_at).toISOString() : null,
+            updatedAt: user.updated_at ? new Date(user.updated_at).toISOString() : null,
+        };
+
         return NextResponse.json({
             success: true,
             message: "ورود با موفقیت انجام شد",
-            user: {
-                id: user.id,
-                username: user.username,
-                email: user.email,
-                firstName: user.first_name,
-                lastName: user.last_name,
-                role: user.role,
-                gender: user.gender ?? null,
-            },
+            user: userProfile,
         });
     } catch (error) {
         console.error('Login API Error:', error);
