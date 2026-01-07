@@ -3,7 +3,6 @@
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
-import { mockAssessmentResults } from '@/data/mockAssessment';
 
 export async function GET(request: Request) {
     try {
@@ -12,12 +11,6 @@ export async function GET(request: Request) {
             return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 401 });
         }
         const userId = session.user.userId;
-
-        return NextResponse.json({
-            success: true,
-            mock: true,
-            data: mockAssessmentResults,
-        });
 
         // دریافت لیست نتایج ارزیابی‌های تکمیل شده برای کاربر
         const [rows] = await db.query(
