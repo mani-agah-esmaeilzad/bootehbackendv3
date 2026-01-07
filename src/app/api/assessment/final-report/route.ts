@@ -134,14 +134,19 @@ export async function GET() {
     }
 
     const parsedCompletions = completedRows.map((row) => transformCompletionRow(row));
-    const aggregated = buildAggregatedFinalReport(userInfo, effectiveAssignments, parsedCompletions);
+    const aggregatedResult = buildAggregatedFinalReport(
+      userInfo,
+      effectiveAssignments,
+      parsedCompletions,
+    );
 
-    if (!aggregated) {
+    if (!aggregatedResult) {
       return NextResponse.json(
         { success: false, message: 'داده‌ای برای نمایش وجود ندارد' },
         { status: 404 },
       );
     }
+    const aggregated = aggregatedResult;
 
     return NextResponse.json({
       success: true,
