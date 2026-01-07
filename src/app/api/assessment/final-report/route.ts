@@ -11,11 +11,22 @@ import {
   transformCompletionRow,
   buildAggregatedFinalReport,
 } from '@/lib/finalReports';
+import { mockFinalReport } from '@/data/mockAssessment';
+
+const ASSESSMENT_MOCK_MODE = process.env.ASSESSMENT_MOCK_MODE !== 'off';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
+    if (ASSESSMENT_MOCK_MODE) {
+      return NextResponse.json({
+        success: true,
+        mock: true,
+        data: mockFinalReport.data,
+      });
+    }
+
     const session = await getSession();
     const userId = session.user?.userId;
     if (!userId) {

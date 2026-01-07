@@ -2,16 +2,26 @@
 
 import { NextResponse } from 'next/server';
 import db from '@/lib/database';
-import { getSession } from '@/lib/auth'; // استفاده از getSession
+import { getSession } from '@/lib/auth';
+import { mockAssessmentResults } from '@/data/mockAssessment';
+
+const ASSESSMENT_MOCK_MODE = process.env.ASSESSMENT_MOCK_MODE !== 'off';
 
 export async function GET(request: Request) {
     try {
-        // استفاده از getSession برای احراز هویت امن
         const session = await getSession();
         if (!session.user?.userId) {
             return NextResponse.json({ success: false, message: 'دسترسی غیرمجاز' }, { status: 401 });
         }
         const userId = session.user.userId;
+
+        if (ASSESSMENT_MOCK_MODE) {
+            return NextResponse.json({
+                success: true,
+                mock: true,
+                data: mockAssessmentResults,
+            });
+        }
 
         // دریافت لیست نتایج ارزیابی‌های تکمیل شده برای کاربر
         const [rows] = await db.query(
