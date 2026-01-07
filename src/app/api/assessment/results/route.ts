@@ -5,8 +5,6 @@ import db from '@/lib/database';
 import { getSession } from '@/lib/auth';
 import { mockAssessmentResults } from '@/data/mockAssessment';
 
-const ASSESSMENT_MOCK_MODE = process.env.ASSESSMENT_MOCK_MODE !== 'off';
-
 export async function GET(request: Request) {
     try {
         const session = await getSession();
@@ -15,13 +13,11 @@ export async function GET(request: Request) {
         }
         const userId = session.user.userId;
 
-        if (ASSESSMENT_MOCK_MODE) {
-            return NextResponse.json({
-                success: true,
-                mock: true,
-                data: mockAssessmentResults,
-            });
-        }
+        return NextResponse.json({
+            success: true,
+            mock: true,
+            data: mockAssessmentResults,
+        });
 
         // دریافت لیست نتایج ارزیابی‌های تکمیل شده برای کاربر
         const [rows] = await db.query(
