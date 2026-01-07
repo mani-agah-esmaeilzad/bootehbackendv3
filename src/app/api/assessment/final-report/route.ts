@@ -14,14 +14,17 @@ import {
 import { mockFinalReport } from '@/data/mockAssessment';
 
 export const dynamic = 'force-dynamic';
+const USE_MOCK_DATA = true;
 
 export async function GET() {
   try {
-    return NextResponse.json({
-      success: true,
-      mock: true,
-      data: mockFinalReport.data,
-    });
+    if (USE_MOCK_DATA) {
+      return NextResponse.json({
+        success: true,
+        mock: true,
+        data: mockFinalReport.data,
+      });
+    }
 
     const session = await getSession();
     const userId = session.user?.userId;
